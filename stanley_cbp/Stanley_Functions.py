@@ -13335,7 +13335,7 @@ def create_search_analysis_diagnostic_report(
 
     search_dir = root / "PlanetSearchOutput" / search_name
     diag_dir = root / "../DiagnosticReports"
-    diag_dir.mkdir(parents=False, exist_ok=True)
+    diag_dir.mkdir(parents=True, exist_ok=True)
     out_pdf = diag_dir / f"{search_name}_search_analysis_diagnostic.pdf"
 
     print(f"[create_search_analysis_diagnostic_report] Writing PDF to: {out_pdf}", flush=True)
