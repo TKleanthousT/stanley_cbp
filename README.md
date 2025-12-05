@@ -8,19 +8,16 @@
 - TESS-specific quadratic baseline removal
 - Variable-duration biweight filters
 - Outlier / flare / kink removal
-- Optional ellipsoidal and reflection trend modeling (BIC-based)
+- Optional ellipsoidal and reflection trend modeling
 
 ### Binary Modeling & Validation
 - Robust eclipse identification
 - Period and harmonic validation using multi-stage BLS
 - Binary geometry extraction (P, e, ω, eclipse depths/widths)
-- Statistical detrending-quality metrics
 
 ### Secondary Eclipse Vetting
 - Geometric feasibility tests
 - Inclination / eccentricity constraints
-- Monte Carlo eclipse-probability estimation
-- Thermal and reflected-light depth checks
 
 ### Transit Timing Variation Search
 - N-body forward modeling via **REBOUND**
@@ -29,6 +26,7 @@
 ### Scalable Execution
 - Fully HPC-compatible (SLURM)
 - Each module (detrending, search, analysis) may run independently or as a unified pipeline
+- Interpolative potential for less computational load
 
 ## Scientific Context (Condensed)
 The pipeline was first validated on the **Kepler** circumbinary-planet sample, where it successfully recovered all known CBPs including **Kepler-47 b/c/d**, searched for additional planets using variable-duration stacked transit detection, and demonstrated that planets smaller than ~3 R⊕ would have been detectable in roughly half the systems. The current implementation extends the approach to **TESS**, with the goals of searching low-mass eclipsing binaries, identifying new CBP candidates, and constraining the **occurrence rate** of small circumbinary planets.

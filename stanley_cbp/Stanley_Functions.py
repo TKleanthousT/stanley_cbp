@@ -13029,8 +13029,8 @@ def create_detrending_diagnostic_report(
     out_pdf = diag_dir / f"{detrending_name}_detrending_diagnostic.pdf"
 
     data_prep_dir = root / "LightCurves" / "Data_Preparation" / detrending_name
-    figures_dir   = root / "LightCurves" / "Figures"          / detrending_name
-    processed_dir = root / "LightCurves" / "Processed"        / detrending_name
+    figures_dir   = root / "LightCurves" / "Figures" / detrending_name
+    processed_dir = root / "LightCurves" / "Processed" / detrending_name
 
     # Optional: debug print
     print(f"[create_detrending_diagnostic_report] Writing PDF to: {out_pdf}", flush=True)
@@ -13334,8 +13334,8 @@ def create_search_analysis_diagnostic_report(
         root = search_root.parent  # the directory that contains PlanetSearchOutput
 
     search_dir = root / "PlanetSearchOutput" / search_name
-    diag_dir   = root / "../DiagnosticReports"
-    diag_dir.mkdir(parents=True, exist_ok=True)
+    diag_dir = root / "../DiagnosticReports"
+    diag_dir.mkdir(parents=False, exist_ok=True)
     out_pdf = diag_dir / f"{search_name}_search_analysis_diagnostic.pdf"
 
     print(f"[create_search_analysis_diagnostic_report] Writing PDF to: {out_pdf}", flush=True)
