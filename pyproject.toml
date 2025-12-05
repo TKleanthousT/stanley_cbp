@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "stanley_cbp"
-version = "0.1.48"
+name = "stanley"
+version = "0.1.51"
 description = "Algorithm developed to conduct a systematic search for exoplanets orbiting eclipsing binary stars."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -22,5 +22,5 @@ include-package-data = false
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["stanley_cbp*"]
+include = ["stanley*"]
 exclude = ["LightCurves*", "Databases*", "PlanetSearchOutput*", "scripts_output*"]

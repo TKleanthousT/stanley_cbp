@@ -256,7 +256,7 @@ def runDetrendingModule(
 
         if mission == 'TIC':
             TIC_val = ID
-            timeFinal, fluxFinal = AC.InjectTransits_David2(
+            timeFinal, fluxFinal = AC.InjectTransits_David(
                 timeFinal, fluxFinal,
                 KIC=TIC_val, DetrendingName=DetrendingName,
                 orbit_params=orbit_params, stellar_params=stellar_params,
