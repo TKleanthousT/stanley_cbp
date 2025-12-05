@@ -536,10 +536,7 @@ def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
                 ax2.set_xlabel("Phase of Binary (0 to 1)")
                 ax2.set_ylabel("Normalized (but not detrended) Flux")
                 ax2.set_title("Eclipses Removed")
-                save_path_cut = os.path.join(
-                    figs_dir,
-                    f"{mission}_{ID}_phase_folded_eclipses_removed.png",
-                )
+                save_path_cut = my_folder / f"{mission}_{ID}_phase_folded_eclipses_removed.png"
                 fig2.savefig(os.path.abspath(save_path_cut), bbox_inches="tight", dpi=300)
                 print(f"[saved] {os.path.abspath(save_path_cut)}")
                 plt.close(fig2)
@@ -10718,7 +10715,6 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
         else:
             ax.plot([-1 * transitDurationAllowance, 1 * transitDurationAllowance], [1., 1.], '--')
 
-        print('we have made it to this point - Tess 10/16')
         plt.show(block=False)
 
         # Save summary figs (only if outdir is valid)
@@ -10919,7 +10915,7 @@ def Search_Create1dSDE(sigmaResults_1d, Pp_search, SearchName, mission, ID, base
     # replace sentinels with median of non-sentinels
     valid_for_med = np.isfinite(sigma) & (sigma != -27.0) & (sigma != -29.0)
     if not np.any(valid_for_med):
-        print('VERY FUCKING UNSTABLE HERE!')
+        print('Unstable or no valid sigma values to compute median from.')
         return -27.0, -27.0
     med = float(np.nanmedian(sigma[valid_for_med]))
     sigma[(sigma == -27.0) | (sigma == -29.0)] = med
