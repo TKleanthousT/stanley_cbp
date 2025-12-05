@@ -1,0 +1,25 @@
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+.env/
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Large runtime data (not tracked in git)
+LightCurves/
+PlanetSearchOutput/
+Databases/*
+!Databases/README.md
+
+# Logs / outputs
+*.log
+*.out
+*.err
