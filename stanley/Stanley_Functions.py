@@ -52,16 +52,17 @@ import re
 import json
 import textwrap
 import os
+from importlib import resources
 
 
 def _resolve_base_dir(base_dir=None) -> Path:
     """
-    Resolve the Stanley project root.
+    Resolve the Stanley project root used for user generated products.
 
     Priority:
       1) explicit base_dir arg
       2) STANLEY_BASE_DIR env var
-      3) walk upward from this file until we find LightCurves/ PlanetSearchOutput/ or Databases/
+      3) walk upward from this file until we find LightCurves/ or PlanetSearchOutput/
       4) fallback: current working directory
     """
     if base_dir:
@@ -72,27 +73,17 @@ def _resolve_base_dir(base_dir=None) -> Path:
         return Path(env).expanduser().resolve()
 
     here = Path(__file__).resolve()
-    anchors = ("LightCurves", "PlanetSearchOutput", "Databases")
+    anchors = ("LightCurves", "PlanetSearchOutput")
 
-    # Walk upward, but stop if we reach site-packages/dist-packages
     for p in here.parents:
         if p.name.lower() in {"site-packages", "dist-packages"}:
             break
-        if p.name == "stanley":  # don't pick the package directory itself
+        if p.name == "stanley":
             continue
         if any((p / a).exists() for a in anchors):
             return p.resolve()
 
-    # Final fallback: use the current working directory
     return Path.cwd().resolve()
-
-
-def _ensure_parent(path: Path):
-    """
-    Simply ensure that the parent directory exists.
-    Does not create the file itself.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
 
 def base_dir() -> Path:
     return _resolve_base_dir(None)
@@ -107,7 +98,44 @@ def p_processed(det_name: str, *parts) -> Path:
     return p_lightcurves("Processed", det_name, *parts)
 
 def p_databases(*parts) -> Path:
-    return base_dir() / "Databases" / Path(*parts)
+    """
+    Return a path to a file inside the packaged Databases directory.
+
+    Works when:
+    - stanley is installed via pip (Databases shipped inside the wheel)
+    - running from a source checkout (fallback to legacy layout)
+    """
+
+    relative = Path(*parts)
+
+    # 1. Try to load packaged data (site-packages)
+    try:
+        db_root = resources.files("stanley.Databases")
+        return Path(db_root) / relative
+    except Exception:
+        pass
+
+    # 2. Fallback: user is running from a source tree with top-level Databases/
+    return base_dir() / "stanley" / "Databases" / relative
+
+
+def p_user_data(*parts) -> Path:
+    """
+    Places user-generated files (manual cuts, injection CSVs)
+    inside the *working directory of the tutorial*,
+    NOT inside the installed package or source.
+    """
+    # new base = the workspace directory
+    root = base_dir() # this already points to the tutorial folder
+    return root / "UserGeneratedData" / Path(*parts)
+
+
+def _ensure_parent(path: Path):
+    """
+    Simply ensure that the parent directory exists.
+    Does not create the file itself.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
 
 def GetID(SystemName):
 	'''
@@ -328,7 +356,7 @@ def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
 
     # Load in the orbit parameters from the Villanova Kepler Eclipsing Binary Catalog
     # http://keplerebs.villanova.edu/
-    orbit_data = np.genfromtxt("../Databases/villanova_orbit_data_kepler.csv", comments="#", delimiter=',', unpack=False)
+    orbit_data = np.genfromtxt("../stanley/Databases/villanova_orbit_data_kepler.csv", comments="#", delimiter=',', unpack=False)
 
     print('Searching for orbit data in Villanova catalog')
     # Search rows for this KIC
@@ -377,7 +405,7 @@ def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
     else:
         # Attempt to load stellar data
         print('Searching for stellar data in Windemuth catalog')
-        stellar_data = np.genfromtxt("../Databases/windemuth_stellar_data.csv", comments="#", delimiter=' ', unpack=False)
+        stellar_data = np.genfromtxt("../stanley/Databases/windemuth_stellar_data.csv", comments="#", delimiter=' ', unpack=False)
 
         # Find the right star by ID
         for ii in range(0, len(stellar_data)):
@@ -586,8 +614,17 @@ def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         return sim, timeOrig, fluxOrig, timeCut, fluxCut, orbit_params, stellar_params, sector_times
 
 
-def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_data=False):
-    '''
+def LoadDataTIC(
+    mission,
+    ID,
+    DetrendingName,
+    remove_eclipses=True,
+    use_saved_data=False,
+    use_manual_cuts=True,
+    interactive_cuts=False,
+    cuts_csv=None,
+):
+    """
     Functionality:
         Load, flatten, normalize, and harmonize a TESS light curve; then validate the binary
         period and prepare downstream products (eclipse modeling, parameter persistence, and
@@ -595,11 +632,17 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         fills gaps with calculated estimates, and writes useful diagnostics/figures to disk.
 
     Arguments:
-        mission (str): Mission identifier; expected 'TIC' for this loader.
+        mission (str): Mission identifier; expected "TIC" for this loader.
         ID (str or int): TIC identifier (numeric string or int).
         DetrendingName (str): Label used for output directories and saved artifacts.
         remove_eclipses (bool, optional): If True, produce an eclipses-removed light curve for plots.
         use_saved_data (bool, optional): If True and cached raw CSV exists, load from it instead of downloading.
+        use_manual_cuts (bool, optional): If True, attempt to apply pre-recorded manual cuts
+            from a cuts CSV.
+        interactive_cuts (bool, optional): If True, launch the interactive manualCuts tool to
+            define or update cuts before proceeding.
+        cuts_csv (str or pathlib.Path or None, optional): Path to the cuts CSV. If None, both
+            manualCuts and apply_manual_cuts default to UserGeneratedData/manual_cuts_TESS.csv.
 
     Returns:
         tuple:
@@ -611,19 +654,13 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
             orbit_params (dict): Final orbital parameters (Pbin, bjd0, depths, widths, eclipse positions, sep, e, omega).
             stellar_params (dict): Stellar parameters (mA, mB, rA, rB, metallicity proxy, flux ratio, median flux err placeholder).
             sector_times (np.ndarray): Nx2 array of sector start/end times in seconds (or single span if cached path used).
-    '''
+    """
 
     # Helpers
     def _as_1d(a, dtype=float):
-        '''
-        Functionality:
-            Convert input to a contiguous 1D NumPy array of the requested dtype.
-        Arguments:
-            a (array-like): Input sequence or scalar.
-            dtype (type, optional): Desired dtype (default float).
-        Returns:
-            np.ndarray: 1D array view/copy.
-        '''
+        """
+        Convert input to a contiguous 1D NumPy array of the requested dtype.
+        """
         return np.asarray(a, dtype=dtype).reshape(-1)
 
     # Track runtime for simple timing persistence
@@ -634,7 +671,7 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
     _out_root = _root / "LightCurves"
     raw_folder = _out_root / "Raw"
     os.makedirs(raw_folder, exist_ok=True)
-    raw_filename = raw_folder / (ID + '_raw.csv')
+    raw_filename = raw_folder / (str(ID) + "_raw.csv")
 
     # Load or download data
     lc_collection = None  # will hold sector-wise light curves if downloaded
@@ -644,21 +681,21 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         timeOrig = np.array(saved_data[0], float)
         fluxOrig = np.array(saved_data[1], float)
         fluxErrOrig = np.array(saved_data[2], float)
-        print(f'Loaded saved data for {mission} {ID}')
+        print(f"Loaded saved data for {mission} {ID}")
     else:
         # If asked to use cache but missing, fall back to download
         if use_saved_data:
-            print(f'Tried to use saved data for {mission} {ID} but could not find it. Downloading from Lightkurve')
+            print(f"Tried to use saved data for {mission} {ID} but could not find it. Downloading from Lightkurve")
 
-        print('Downloading data from lightkurve')
+        print("Downloading data from lightkurve")
         # Query SPOC short-cadence products for TESS
-        sr = lk.search_lightcurve(f"TIC {ID}", mission='TESS', author='SPOC', exptime='short')
+        sr = lk.search_lightcurve(f"TIC {ID}", mission="TESS", author="SPOC", exptime="short")
         if len(sr) == 0:
             # No matching products found
             raise RuntimeError(f"No SPOC short cadence light curves found for TIC {ID}")
 
         # Download all matching sectors with a conservative bitmask
-        lc_collection = sr.download_all(quality_bitmask='hard')
+        lc_collection = sr.download_all(quality_bitmask="hard")
         print(f"Total number of sectors downloaded: {len(lc_collection)}")
 
         # Collect sector start/end times in seconds for reference
@@ -666,7 +703,7 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         for lc in lc_collection:
             sector_times.append([
                 float(lc.time.value[0]) * days2sec,
-                float(lc.time.value[-1]) * days2sec
+                float(lc.time.value[-1]) * days2sec,
             ])
         sector_times = np.asarray(sector_times, float)
 
@@ -674,9 +711,9 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         data_lightkurve = lc_collection.stitch()
 
         # Extract time (days) and SAP flux/uncertainties
-        timeOrig = np.array(data_lightkurve['time'].value, float)         # days
-        fluxOrig = np.array(data_lightkurve['sap_flux'].value, float)
-        fluxErrOrig = np.array(data_lightkurve['sap_flux_err'].value, float)
+        timeOrig = np.array(data_lightkurve["time"].value, float)         # days
+        fluxOrig = np.array(data_lightkurve["sap_flux"].value, float)
+        fluxErrOrig = np.array(data_lightkurve["sap_flux_err"].value, float)
 
         # Keep only finite rows to avoid NaN propagation
         finite = np.isfinite(timeOrig) & np.isfinite(fluxOrig) & np.isfinite(fluxErrOrig)
@@ -697,33 +734,54 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         print(f"[saved raw] {os.path.abspath(raw_filename)}")
 
     # If we loaded from cache, approximate a single-span "sector_times" covering the data
-    if 'sector_times' not in locals():
+    if "sector_times" not in locals():
         sector_times = np.array([[timeOrig.min(), timeOrig.max()]], float)
 
     # Keep a representative median flux uncertainty for dict outputs
     median_flux_err = float(np.nanmedian(fluxErrOrig))
 
-    # Manual cuts
-    # Apply per-target manual trimming rules (e.g., remove known bad intervals)
-    timeOrig, fluxOrig, fluxErrOrig = apply_manual_cuts(
-        timeOrig, fluxOrig, fluxErrOrig, ID,
-        cuts_csv='../Databases/manual_cuts_TESS.csv', days2sec=86400
-    )
+    # ----------------------------------------------------------------------
+    # Manual cuts: interactive or non-interactive, controlled by flags
+    # ----------------------------------------------------------------------
+    if use_manual_cuts:
+        if interactive_cuts:
+            print("Running interactive manualCuts to define or update cuts...")
+            timeOrig, fluxOrig, fluxErrOrig = manualCuts(
+                timeOrig,
+                fluxOrig,
+                fluxErrOrig,
+                ID,
+                days2sec=days2sec,
+                cuts_csv=cuts_csv,
+            )
+        else:
+            # Non-interactive: apply any pre-recorded cuts if the CSV and ID entry exist
+            timeOrig, fluxOrig, fluxErrOrig = apply_manual_cuts(
+                timeOrig,
+                fluxOrig,
+                fluxErrOrig,
+                ID,
+                cuts_csv=cuts_csv,
+                days2sec=days2sec,
+            )
+    else:
+        print("Skipping manual cuts (use_manual_cuts=False).")
+
     # Preserve copies for later plotting/persistence (original sampling)
     timeOrigCopy, fluxOrigCopy, fluxErrOrigCopy = np.copy(timeOrig), np.copy(fluxOrig), np.copy(fluxErrOrig)
 
+    # ----------------------------------------------------------------------
     # Sort & chunk (by gaps)
-    # Sort by time and split the light curve at large time gaps
+    # ----------------------------------------------------------------------
     sortedTime, sortedFlux, sortedFluxErr = sorting(timeOrig, fluxOrig, fluxErrOrig)
 
     # chunk_by_gaps expects time in days; convert a copy for gap detection
     time_days_for_chunk = sortedTime / days2sec
     # gap threshold of 1 day for sector-edge/large-gap segmentation
-    time_chunks, flux_chunks = chunk_by_gaps(time_days_for_chunk, sortedFlux, 1)
-    _, fluxErr_chunks = chunk_by_gaps(time_days_for_chunk, sortedFluxErr, 1)
+    time_chunks, flux_chunks = chunk_by_gaps(time_days_for_chunk, sortedFlux, 1.0)
+    _, fluxErr_chunks = chunk_by_gaps(time_days_for_chunk, sortedFluxErr, 1.0)
 
     # Flatten each chunk
-    # Detrend locally per chunk to remove long-term trends while preserving eclipses/transits
     fluxQFlat, fluxErrQFlat, timeQFlat = [], [], []
     window_length_global = 0.5  # days (global fallback window for wotan-based flatten)
 
@@ -737,21 +795,26 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
 
         # Mask potential eclipses/transits before estimating trend
         pre_mask = initial_eclipse_mask_time_domain(
-            time_chunk, flux_chunk,
-            min_dur_hr=0.5, max_dur_hr=12, depth_sigma=2.0, trend_window_days=2.0
+            time_chunk,
+            flux_chunk,
+            min_dur_hr=0.5,
+            max_dur_hr=12.0,
+            depth_sigma=2.0,
+            trend_window_days=2.0,
         )
 
         # Flatten chunk safely (guarding against failures and short windows)
         t_ok, f_flat_ok, e_ok = safe_flatten_chunk(
-            time_chunk, flux_chunk, err_chunk,
+            time_chunk,
+            flux_chunk,
+            err_chunk,
             global_window_days=window_length_global,
             min_points_per_window=7,
-            pre_mask=pre_mask
+            pre_mask=pre_mask,
         )
         # Accumulate processed segments
         timeQFlat.append(t_ok)
         fluxQFlat.append(f_flat_ok)
-        # If no error series returned, fill with NaNs (shape-consistent)
         fluxErrQFlat.append(e_ok if e_ok is not None else np.full_like(f_flat_ok, np.nan))
 
     # Concatenate all chunks into uniform arrays
@@ -759,8 +822,9 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
     fluxQErr = np.concatenate(fluxErrQFlat)
     timeQ = np.concatenate(timeQFlat) * days2sec  # seconds
 
+    # ----------------------------------------------------------------------
     # Remove edges around gaps (seconds)
-    # Remove boundary regions near gaps where flattening is less reliable
+    # ----------------------------------------------------------------------
     dts = np.diff(timeQ)
     to_remove_mask = np.zeros(timeQ.shape, dtype=bool)
     no_gap = 121           # 2-min cadence nominal separation (in seconds)
@@ -770,13 +834,10 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
     for idx, dt in enumerate(dts):
         i, j = idx, idx + 1
         if dt > big_gap:
-            # Large data gap: remove generous edges
             remove_boundary_around_gap(i, j, 12 * 60 * 60, timeQ, to_remove_mask)
         elif dt > small_gap:
-            # Medium gap
             remove_boundary_around_gap(i, j, 30 * 60, timeQ, to_remove_mask)
         elif dt > no_gap:
-            # Slightly irregular cadence
             remove_boundary_around_gap(i, j, 15 * 60, timeQ, to_remove_mask)
 
     # Keep only points far enough from detected gaps
@@ -786,9 +847,8 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
     cleanFluxErrLoc = fluxQErr[to_keep_mask]
 
     # Quick raw diagnostic (optional)
-    # Lightweight plot to visualize cleaned (but not folded) light curve
     plt.figure(figsize=(10, 5))
-    plt.plot(cleanTimeLoc / days2sec, cleanFluxLoc, '.', ms=1, color='blue', alpha=0.5)
+    plt.plot(cleanTimeLoc / days2sec, cleanFluxLoc, ".", ms=1, color="blue", alpha=0.5)
     plt.title(f"Cleaned Light Curve for {mission} {ID}")
     plt.xlabel("Time (days)")
     plt.ylabel("Normalized Flux")
@@ -796,39 +856,41 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
     plt.show()
     plt.close()
 
+    # ----------------------------------------------------------------------
     # Catalogs & Params
-    # Flags tracking which catalog(s) supplied usable data
+    # ----------------------------------------------------------------------
     antic = False
     orbit_data_found = False
     stellar_data_found = False
     orbit_data_calculated = False
     stellar_data_calculated = False
 
-    # Load ANTIC and Villanova summary CSVs for TESS EBs
-    antic_data = pd.read_csv("../Databases/ANTIC_Catalogue_12_11_filtered.csv")
-    orbit_data = pd.read_csv("../Databases/villanova_orbit_data_tess.csv")
+    # Load ANTIC and Villanova summary CSVs for TESS EBs (packaged Databases)
+    antic_data = pd.read_csv(p_databases("ANTIC_Catalogue_12_11_filtered.csv"))
+    orbit_data = pd.read_csv(p_databases("villanova_orbit_data_tess.csv"))
 
-    print('Searching for orbit data in ANTIC and Villanova catalogs')
+    print("Searching for orbit data in ANTIC and Villanova catalogs")
 
     # Select rows for this TIC ID
     row_ANTIC = antic_data[antic_data["ID"] == int(ID)]
     row_Villanova = orbit_data[orbit_data["tess_id"] == int(ID)]
 
-    # Initialize defaults for parameters that may be filled from catalogs or calculations
+    # Initialize defaults
     Pbin = np.nan
     bjd0 = np.nan
     pdepth = sdepth = pwidth = swidth = prim_pos = sec_pos = sep = np.nan
     mA = mB = rA = rB = tA = tB = a = metallicity = flux_ratio = np.nan
     eccANTIC = omegaANTIC = np.nan
 
-    # ANTIC
+    # ----------------------------------------------------------------------
+    # ANTIC path
+    # ----------------------------------------------------------------------
     if len(row_ANTIC) == 1:
-        # Prefer ANTIC where available for both orbital and stellar params
         antic = True
-        print('Orbit and stellar data found in ANTIC')
+        print("Orbit and stellar data found in ANTIC")
         orbit_data_found = True
 
-        # Orbital parameters (converted to seconds where applicable)
+        # Orbital parameters
         Pbin = float(row_ANTIC.period.iloc[0] * days2sec)
         bjd0 = float(row_ANTIC.bjd0.iloc[0] * days2sec)
         pdepth = float(row_ANTIC.pdepth.iloc[0])
@@ -839,21 +901,20 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         sec_pos = float(row_ANTIC.tSE.iloc[0])
         sep = float(row_ANTIC.sep.iloc[0])
 
-        # Stellar parameters (masses/radii in SI)
+        # Stellar parameters
         stellar_data_found = True
         mA = float(row_ANTIC.MassP.iloc[0] * mSun_kg)
         mB = float(row_ANTIC.MassS.iloc[0] * mSun_kg)
         rA = float(row_ANTIC.RP.iloc[0] * rSun_m)
         rB = float(row_ANTIC.RS.iloc[0] * rSun_m)
-        tA = np.nan  # (temperature not provided here)
+        tA = np.nan
         tB = np.nan
-        a = np.nan   # (semi-major axis to be estimated if needed)
+        a = np.nan
         metallicity = float(row_ANTIC.z.iloc[0])
         flux_ratio = float(row_ANTIC.frat.iloc[0])
         eccANTIC = float(row_ANTIC.e.iloc[0])
         omegaANTIC = float(row_ANTIC.omega.iloc[0])
 
-        # Bundle parameters captured so far
         orbit_stellar_params = {
             "Pbin": Pbin,
             "bjd0": bjd0,
@@ -876,16 +937,14 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
             "median_flux_err": median_flux_err,
         }
 
-        # Identify missing values to try filling from Villanova
         nan_params = {
             k: v for k, v in orbit_stellar_params.items()
             if (v is None) or (isinstance(v, float) and not np.isfinite(v))
         }
 
         if len(nan_params) > 0:
-            print('Further orbit/stellar info needed, searching Villanova')
+            print("Further orbit/stellar info needed, searching Villanova")
             if len(row_Villanova) == 1:
-                # Fill only the missing keys from Villanova fields
                 if "Pbin" in nan_params:
                     Pbin = float(row_Villanova.period.iloc[0] * days2sec)
                 if "bjd0" in nan_params:
@@ -903,20 +962,25 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
                 if "sec_pos" in nan_params:
                     sec_pos = float(row_Villanova.sec_pos_pf.iloc[0])
                 if "sep" in nan_params:
-                    # Compute sep if not explicitly provided
                     sep = (prim_pos + sec_pos) % 1.0
 
         # If essential orbital params are still missing, attempt BLS-based estimation
         if (not np.isfinite(Pbin)) or (not np.isfinite(bjd0)):
             print("No recorded value for period and/or bjd0, calculating now.")
             Pbin_bls, bjd0_bls, transit_depth, transit_duration_sec, meta_bls = iterative_bls_single_dip_search(
-                cleanTimeLoc, cleanFluxLoc, cleanFluxErrLoc,
+                cleanTimeLoc,
+                cleanFluxLoc,
+                cleanFluxErrLoc,
                 DetrendingName,
-                min_period_days=0.05, max_period_days=90.0,
-                q_eff=None, pre_detrend='both', bic_delta=0.0,
-                check_harmonics=False, plot_harmonics=False, presets_sequence=[HYPERFINE]
+                min_period_days=0.05,
+                max_period_days=90.0,
+                q_eff=None,
+                pre_detrend="both",
+                bic_delta=0.0,
+                check_harmonics=False,
+                plot_harmonics=False,
+                presets_sequence=[HYPERFINE],
             )
-            # The current code chooses not to override (kept consistent)
             override_bls = False
             if not override_bls:
                 if np.isfinite(Pbin_bls):
@@ -925,58 +989,63 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
                     bjd0 = bjd0_bls
 
         # PERIOD VALIDATION
-        # Validate/clean the candidate binary period and produce a vetted light curve
         override_validation = False
         Pbin, timeVP, fluxVP, fluxErrVP, diagnostics = validate_period_filter3(
-            cleanTimeLoc, cleanFluxLoc, cleanFluxErrLoc,
-            Pbin, window_length_global, DetrendingName, ID,
-            plot=True,  # validator may produce its own final plot if validation passes
-            override=override_validation, use_double_dip_logic=False
+            cleanTimeLoc,
+            cleanFluxLoc,
+            cleanFluxErrLoc,
+            Pbin,
+            window_length_global,
+            DetrendingName,
+            ID,
+            plot=True,
+            override=override_validation,
+            use_double_dip_logic=False,
         )
 
-        if not diagnostics.get('period_validation', False):
-            # If the validator flagged a failure, abort the run
+        if not diagnostics.get("period_validation", False):
             raise RuntimeError("Period validation failed in validate_period_filter3()")
         else:
-            # Report validated period
             print(f"Period validation passed, proceeding with period: {Pbin / days2sec:.6f} days")
             print("Period diagnostics:", diagnostics)
 
-            # OPTIONAL: produce an extra phase-folded figure (outside the validator)
             base = _resolve_base_dir(None)
-            my_folder = base / 'LightCurves' / 'Data_Preparation' / DetrendingName
+            my_folder = base / "LightCurves" / "Data_Preparation" / DetrendingName
             my_folder.mkdir(parents=True, exist_ok=True)
-            save_path_final = my_folder / f'Validated_Period_Extra_{ID}.png'
+            save_path_final = my_folder / f"Validated_Period_Extra_{ID}.png"
             fig, ax = plt.subplots(figsize=(10, 5))
             ph = (timeVP / Pbin) % 1.0
-            sc = ax.scatter(ph, fluxVP, s=3, c=timeVP, cmap='viridis')
+            sc = ax.scatter(ph, fluxVP, s=3, c=timeVP, cmap="viridis")
             ax.set_xlabel("Phase of Binary (0 to 1)")
             ax.set_ylabel("Normalized & Detrended Flux")
             ax.set_title("Validated Period (extra view)")
-            ax.grid(True, ls=':')
-            fig.colorbar(sc, ax=ax, label='Time (s)')
-            fig.savefig(save_path_final, dpi=300, bbox_inches='tight')
+            ax.grid(True, ls=":")
+            fig.colorbar(sc, ax=ax, label="Time (s)")
+            fig.savefig(save_path_final, dpi=300, bbox_inches="tight")
             plt.close(fig)
 
-            # Remove spurious deep points after validation (unless overridden)
             if not override_validation:
                 timeVP, fluxVP, fluxErrVP = remove_spurious_deep_points(
-                    cleanTimeLoc, cleanFluxLoc, cleanFluxErrLoc,
-                    Pbin, DetrendingName, ID, depth_threshold_fraction=0.75, phase_step=0.01
+                    cleanTimeLoc,
+                    cleanFluxLoc,
+                    cleanFluxErrLoc,
+                    Pbin,
+                    DetrendingName,
+                    ID,
+                    depth_threshold_fraction=0.75,
+                    phase_step=0.01,
                 )
             else:
                 timeVP, fluxVP, fluxErrVP = cleanTimeLoc, cleanFluxLoc, cleanFluxErrLoc
 
-        # Sanity/phase alignment check for bjd0 relative to the validated series
         bjd0 = BJD0Check(bjd0, timeVP, fluxVP, fluxErrVP, Pbin, DetrendingName, ID)
 
-        # Fill in any missing stellar parameters from helper estimators
+        # Fill stellar parameters if missing
         if not np.isfinite(mA):
-            mA = findMaAndRaAndTa(ID, paramreturned='mA')
+            mA = findMaAndRaAndTa(ID, paramreturned="mA")
         if not np.isfinite(rA):
-            rA = findMaAndRaAndTa(ID, paramreturned='rA')
+            rA = findMaAndRaAndTa(ID, paramreturned="rA")
         if not np.isfinite(rB):
-            # Estimate rB using eclipse morphology if needed
             phaseTime = (timeVP / Pbin) % 1.0
             min_index = np.argmin(fluxVP)
             phaseTime = (phaseTime - phaseTime[min_index] + 0.5) % 1.0
@@ -993,31 +1062,40 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         if not np.isfinite(metallicity):
             metallicity = 0.0
         if not np.isfinite(flux_ratio):
-            # Use luminosity relation ratio as a proxy
             flux_ratio = MassRadiusLuminosityRelation(mB, rB) / MassRadiusLuminosityRelation(mA, rA)
 
-    # Villanova only path
-    # If ANTIC did not provide, but Villanova did, follow this path
+    # ----------------------------------------------------------------------
+    # Villanova-only path
+    # ----------------------------------------------------------------------
     if (not orbit_data_found) and (len(row_Villanova) == 1):
         orbit_data_found = True
-        print('Orbit data found entirely from Villanova')
+        print("Orbit data found entirely from Villanova")
 
-        # Period in seconds from Villanova
         Pbin = float(row_Villanova.period.iloc[0] * days2sec)
 
-        # Validate period similarly to ANTIC path
         Pbin, timeSpurious, fluxSpurious, fluxErrSpurious, diagnostics = validate_period_filter3(
-            cleanTimeLoc, cleanFluxLoc, cleanFluxErrLoc,
-            Pbin, window_length_global, DetrendingName, ID, plot=True, override=False
+            cleanTimeLoc,
+            cleanFluxLoc,
+            cleanFluxErrLoc,
+            Pbin,
+            window_length_global,
+            DetrendingName,
+            ID,
+            plot=True,
+            override=False,
         )
 
-        # Remove spurious deep outliers post-validation
         timeVP, fluxVP, fluxErrVP = remove_spurious_deep_points(
-            timeSpurious, fluxSpurious, fluxErrSpurious, Pbin, DetrendingName, ID,
-            depth_threshold_fraction=0.75, phase_step=0.01
+            timeSpurious,
+            fluxSpurious,
+            fluxErrSpurious,
+            Pbin,
+            DetrendingName,
+            ID,
+            depth_threshold_fraction=0.75,
+            phase_step=0.01,
         )
 
-        # Assign other Villanova fields (convert bjd0 to seconds)
         bjd0 = float(row_Villanova.bjd0.iloc[0] * days2sec)
         bjd0 = BJD0Check(bjd0, timeVP, fluxVP, fluxErrVP, Pbin, DetrendingName, ID)
         pdepth = float(row_Villanova.prim_depth_pf.iloc[0])
@@ -1028,80 +1106,137 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         sec_pos = float(row_Villanova.sec_pos_pf.iloc[0])
         sep = (prim_pos + sec_pos) % 1.0
 
-        # Not provided in this branch; leave NaN (or compute later as needed)
         mA = mB = rA = rB = tA = tB = a = metallicity = flux_ratio = median_flux_err = eccANTIC = omegaANTIC = np.nan
 
-        # Bundle for downstream consumption
         orbit_stellar_params = {
-            "Pbin": Pbin, "bjd0": bjd0,
-            "pdepth": pdepth, "sdepth": sdepth, "pwidth": pwidth, "swidth": swidth,
-            "prim_pos": prim_pos, "sec_pos": sec_pos, "sep": sep,
-            "mA": mA, "mB": mB, "rA": rA, "rB": rB,
-            "tA": tA, "tB": tB, "a": a, "met": metallicity, "frat": flux_ratio,
-            "median_flux_err": median_flux_err
+            "Pbin": Pbin,
+            "bjd0": bjd0,
+            "pdepth": pdepth,
+            "sdepth": sdepth,
+            "pwidth": pwidth,
+            "swidth": swidth,
+            "prim_pos": prim_pos,
+            "sec_pos": sec_pos,
+            "sep": sep,
+            "mA": mA,
+            "mB": mB,
+            "rA": rA,
+            "rB": rB,
+            "tA": tA,
+            "tB": tB,
+            "a": a,
+            "met": metallicity,
+            "frat": flux_ratio,
+            "median_flux_err": median_flux_err,
         }
 
-    # From whichever branch above, ensure a dictionary exists with at least the orbital fields
-    orbit_stellar_params = locals().get('orbit_stellar_params', {
-        "Pbin": Pbin, "bjd0": bjd0,
-        "pdepth": pdepth, "sdepth": sdepth,
-        "pwidth": pwidth, "swidth": swidth,
-        "prim_pos": prim_pos, "sec_pos": sec_pos, "sep": sep
-    })
+    # Ensure orbit_stellar_params exists
+    orbit_stellar_params = locals().get(
+        "orbit_stellar_params",
+        {
+            "Pbin": Pbin,
+            "bjd0": bjd0,
+            "pdepth": pdepth,
+            "sdepth": sdepth,
+            "pwidth": pwidth,
+            "swidth": swidth,
+            "prim_pos": prim_pos,
+            "sec_pos": sec_pos,
+            "sep": sep,
+        },
+    )
 
-    # Reset local variables from dict (and sanitize eclipse widths to plausible ranges)
-    prim_pos = orbit_stellar_params['prim_pos']
-    sec_pos = orbit_stellar_params['sec_pos']
-    pwidth = orbit_stellar_params.get('pwidth', np.nan)
-    swidth = orbit_stellar_params.get('swidth', np.nan)
+    prim_pos = orbit_stellar_params["prim_pos"]
+    sec_pos = orbit_stellar_params["sec_pos"]
+    pwidth = orbit_stellar_params.get("pwidth", np.nan)
+    swidth = orbit_stellar_params.get("swidth", np.nan)
     pwidth = pwidth if (np.isfinite(pwidth) and pwidth <= 0.3) else np.nan
     swidth = swidth if (np.isfinite(swidth) and swidth <= 0.3) else np.nan
-    pdepth = orbit_stellar_params.get('pdepth', np.nan)
-    sdepth = orbit_stellar_params.get('sdepth', np.nan)
+    pdepth = orbit_stellar_params.get("pdepth", np.nan)
+    sdepth = orbit_stellar_params.get("sdepth", np.nan)
 
+    # ----------------------------------------------------------------------
     # Eclipse modeling
-    # Fit eclipse geometry and derive derived eccentricity/omega (with and without assumptions)
-    (timeCut, fluxCut, fluxErrCut, prim_pos, sec_pos, pwidth, swidth, pdepth, sdepth,
-     sep, ecc, omega, eccNoAssump, omegaNoAssump, ecoswNoAssump, esinwNoAssump,
-     knownEclipse) = modelEclipse3(
-        timeVP, fluxVP, fluxErrVP, Pbin, bjd0, sep, prim_pos, sec_pos, pwidth, swidth,
-        pdepth, sdepth, rA, rB, tA, tB, a, DetrendingName=DetrendingName, ID=ID,
-        plotting=True, vetting=True
+    # ----------------------------------------------------------------------
+    (
+        timeCut,
+        fluxCut,
+        fluxErrCut,
+        prim_pos,
+        sec_pos,
+        pwidth,
+        swidth,
+        pdepth,
+        sdepth,
+        sep,
+        ecc,
+        omega,
+        eccNoAssump,
+        omegaNoAssump,
+        ecoswNoAssump,
+        esinwNoAssump,
+        knownEclipse,
+    ) = modelEclipse3(
+        timeVP,
+        fluxVP,
+        fluxErrVP,
+        Pbin,
+        bjd0,
+        sep,
+        prim_pos,
+        sec_pos,
+        pwidth,
+        swidth,
+        pdepth,
+        sdepth,
+        rA,
+        rB,
+        tA,
+        tB,
+        a,
+        DetrendingName=DetrendingName,
+        ID=ID,
+        plotting=True,
+        vetting=True,
     )
 
-    # Re-apply manual cuts to the modeled arrays for consistency with earlier trimming
-    timeCut, fluxCut, fluxErrCut = apply_manual_cuts(
-        timeCut, fluxCut, fluxErrCut, ID,
-        cuts_csv='../Databases/manual_cuts_TESS.csv', days2sec=86400
-    )
+    # Re-apply manual cuts to modeled arrays if requested
+    if use_manual_cuts:
+        timeCut, fluxCut, fluxErrCut = apply_manual_cuts(
+            timeCut,
+            fluxCut,
+            fluxErrCut,
+            ID,
+            cuts_csv=cuts_csv,
+            days2sec=days2sec,
+        )
 
-    # Compare derived e, ω to ANTIC values if available; prefer catalog if mismatch
+    # Compare derived e, omega to ANTIC values if available
     if np.isfinite(eccANTIC):
-        if np.isclose(ecc, eccANTIC, atol=1E-5):
-            print('Calculated and ANTIC eccentricities match!')
+        if np.isclose(ecc, eccANTIC, atol=1e-5):
+            print("Calculated and ANTIC eccentricities match!")
         else:
-            print('Calculated eccentricity does not match ANTIC; using recorded value')
+            print("Calculated eccentricity does not match ANTIC; using recorded value")
             ecc = eccANTIC
     else:
         print("No recorded value for ecc, proceeding with calculated value.")
 
     if np.isfinite(omegaANTIC):
-        if np.isclose(omega, omegaANTIC, atol=1E-5):
-            print('Calculated and ANTIC arguments of periapsis match!')
+        if np.isclose(omega, omegaANTIC, atol=1e-5):
+            print("Calculated and ANTIC arguments of periapsis match!")
         else:
-            print('Calculated ω does not match ANTIC; using recorded value')
+            print("Calculated omega does not match ANTIC; using recorded value")
             omega = omegaANTIC
     else:
-        print("No recorded value for ω, proceeding with calculated value.")
+        print("No recorded value for omega, proceeding with calculated value.")
 
-    # Convenience: convert SI to solar units for writes
+    # Convenience: convert SI to solar units for logging
     calc_mA = mA / mSun_kg
     calc_mB = mB / mSun_kg
     calc_rA = rA / rSun_m
     calc_rB = rB / rSun_m
 
     if antic:
-        # Prepare comparative logging versus ANTIC
         ANTICmA = row_ANTIC.MassP.iloc[0] * mSun_kg
         ANTICmB = row_ANTIC.MassS.iloc[0] * mSun_kg
         ANTICrA = row_ANTIC.RP.iloc[0] * rSun_m
@@ -1113,41 +1248,53 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         antic_ecosw = row_ANTIC.ecosω.iloc[0]
         antic_esinw = row_ANTIC.esinω.iloc[0]
 
-    # Final orbital parameters to return
+    # Final orbital parameters
     orbit_params = {
-        "Pbin": Pbin, "bjd0": bjd0,
-        "pdepth": pdepth, "sdepth": sdepth,
-        "pwidth": pwidth, "swidth": swidth,
-        "prim_pos": prim_pos, "sec_pos": sec_pos,
-        "sep": sep, "e": ecc, "omega": omega
+        "Pbin": Pbin,
+        "bjd0": bjd0,
+        "pdepth": pdepth,
+        "sdepth": sdepth,
+        "pwidth": pwidth,
+        "swidth": swidth,
+        "prim_pos": prim_pos,
+        "sec_pos": sec_pos,
+        "sep": sep,
+        "e": ecc,
+        "omega": omega,
     }
 
-    # Final stellar parameters to return
+    # Final stellar parameters
     stellar_params = {
-        "mA": mA, "mB": mB, "rA": rA, "rB": rB,
-        "met": metallicity, "frat": flux_ratio,
-        "median_flux_err": -27,
+        "mA": mA,
+        "mB": mB,
+        "rA": rA,
+        "rB": rB,
+        "met": metallicity,
+        "frat": flux_ratio,
+        "median_flux_err": -27,  # placeholder to keep structure consistent
     }
 
+    # ----------------------------------------------------------------------
     # Prepare output directories for figures and prepped data
+    # ----------------------------------------------------------------------
     base = _resolve_base_dir(None)
-    my_folder_Tess = base / 'LightCurves' / 'Data_Preparation' / DetrendingName
+    my_folder_Tess = base / "LightCurves" / "Data_Preparation" / DetrendingName
     my_folder_Tess.mkdir(parents=True, exist_ok=True)
-    figs_dir = base / 'LightCurves' / 'Figures' / DetrendingName
+    figs_dir = base / "LightCurves" / "Figures" / DetrendingName
     figs_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save an "original data" phase plot (not detrended, for traceability)
-    save_path_orig = os.path.join(my_folder_Tess, f'Original_Data_{ID}.png')
-    save_path_figs = os.path.join(figs_dir, f'{mission}_{ID}_phase_folded_original_data.png')
+    # Save an "original data" phase plot
+    save_path_orig = os.path.join(my_folder_Tess, f"Original_Data_{ID}.png")
+    save_path_figs = os.path.join(figs_dir, f"{mission}_{ID}_phase_folded_original_data.png")
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.scatter(((timeOrigCopy - bjd0) / orbit_params['Pbin']) % 1, fluxOrigCopy, s=3, marker='.', c=timeOrigCopy)
+    ax.scatter(((timeOrigCopy - bjd0) / orbit_params["Pbin"]) % 1, fluxOrigCopy, s=3, marker=".", c=timeOrigCopy)
     ax.set_xlabel("Phase of Binary (0 to 1)")
     ax.set_ylabel("Normalized (but not detrended) Flux")
     ax.set_title("Original Data")
     for target_path in (save_path_figs, save_path_orig):
         try:
             abs_path = os.path.abspath(target_path)
-            fig.savefig(abs_path, bbox_inches='tight', dpi=300)
+            fig.savefig(abs_path, bbox_inches="tight", dpi=300)
             print(f"[saved] {abs_path}")
         except Exception as e:
             print(f"[ERROR saving] {abs_path}: {e}")
@@ -1156,58 +1303,64 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
     if remove_eclipses:
         # Generate eclipses-removed plot for quick QA
         timeCutGraph, fluxCutGraph, non_nan_params_stored = RemoveEclipses(
-            np.copy(timeOrigCopy), np.copy(fluxOrigCopy),
-            Pbin, bjd0, prim_pos, sec_pos, pwidth, swidth, sep,
-            cuts='both', phase_folded='n'
+            np.copy(timeOrigCopy),
+            np.copy(fluxOrigCopy),
+            Pbin,
+            bjd0,
+            prim_pos,
+            sec_pos,
+            pwidth,
+            swidth,
+            sep,
+            cuts="both",
+            phase_folded="n",
         )
 
         out_figs = os.path.join(figs_dir, f"{mission}_{ID}_phase_folded_eclipses_removed.png")
         out_prep = os.path.join(my_folder_Tess, f"Phase_Folded_Eclipses_Removed_{ID}.png")
         fig2, ax2 = plt.subplots(figsize=(10, 5))
         ph2 = ((timeCutGraph - bjd0) / Pbin) % 1.0
-        sc = ax2.scatter(ph2, fluxCutGraph, s=3, marker='.', c=timeCutGraph)
+        sc = ax2.scatter(ph2, fluxCutGraph, s=3, marker=".", c=timeCutGraph)
         ax2.set_xlabel("Phase of Binary (0 to 1)")
         ax2.set_ylabel("Normalized (but not detrended) Flux")
         ax2.set_title("Eclipses Removed")
         for target_path in (out_figs, out_prep):
             try:
                 abs_path = os.path.abspath(target_path)
-                fig2.savefig(abs_path, bbox_inches='tight', dpi=300)
+                fig2.savefig(abs_path, bbox_inches="tight", dpi=300)
                 print(f"[saved] {abs_path}")
             except Exception as e:
                 print(f"[ERROR saving] {target_path}: {e}")
         plt.close(fig2)
 
+    # ----------------------------------------------------------------------
     # Rebound simulation
-    # Construct a REBOUND simulation for the validated binary system
+    # ----------------------------------------------------------------------
     print(
         "Creating rebound simulation with:",
-        "Pbin:", Pbin / days2sec, "days, bjd0:", bjd0 / days2sec,
-        "ecc:", ecc, "omega:", omega,
-        "mA:", mA / mSun_kg, "mB:", mB / mSun_kg,
-        "rA:", rA / rSun_m, "rB:", rB / rSun_m
+        "Pbin:", Pbin / days2sec,
+        "days, bjd0:", bjd0 / days2sec,
+        "ecc:", ecc,
+        "omega:", omega,
+        "mA:", mA / mSun_kg,
+        "mB:", mB / mSun_kg,
+        "rA:", rA / rSun_m,
+        "rB:", rB / rSun_m,
     )
     sim = CreateReboundSim(Pbin, ecc, omega, mA, mB, rA, rB, bjd0, timeOrigCopy[0])
 
-    # Capture initial osculating elements for record-keeping
     orbits = sim.orbits()
     theta_init = orbits[0].theta
     omega_init = orbits[0].omega
     P_init = orbits[0].P
     ecc_init = orbits[0].e
 
-    # Persist starting params and timing diagnostics
     _root = _resolve_base_dir(None)
     folder_name = _root / "LightCurves" / "Processed" / str(DetrendingName)
     folder_name.mkdir(parents=True, exist_ok=True)
 
-    # Build output path using Path operations
-    binary_path = (
-        folder_name /
-        f"{mission}_{ID}_{DetrendingName}_binaryStartingParams.csv"
-    )
+    binary_path = folder_name / f"{mission}_{ID}_{DetrendingName}_binaryStartingParams.csv"
 
-    # Save a CSV with starting binary parameters for later modules
     with open(binary_path, "w") as binaryParamsFile:
         binaryParamsFile.write("mA (mSun)," + str(mA / mSun_kg) + "\n")
         binaryParamsFile.write("mB (mSun)," + str(mB / mSun_kg) + "\n")
@@ -1219,19 +1372,15 @@ def LoadDataTIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         binaryParamsFile.write("ecc," + str(ecc_init) + "\n")
         binaryParamsFile.write("omega (deg)," + str(np.degrees(omega_init)) + "\n")
 
-
     end_time = TIME.time()
-
     timing_path = folder_name / f"{mission}_{ID}_{DetrendingName}_LoadDataTICTiming.csv"
-
     with open(timing_path, "w") as fh:
         fh.write(f"Start time: {start_time}\n")
         fh.write(f"End time: {end_time}\n")
         fh.write(f"Total time: {end_time - start_time} seconds\n")
 
-
-    # Return all primary artifacts/arrays for downstream modules
     return sim, timeOrigCopy, fluxOrigCopy, timeCut, fluxCut, orbit_params, stellar_params, sector_times
+
 
 def _mad(x):
 	'''
@@ -6283,10 +6432,17 @@ def BJD0Check(bjd0, timeData, fluxData, fluxErrData, Pbin, DetrendingName, ID, b
     return final_bjd0
 
 
-
-def manualCuts(timeData, fluxData, fluxErr, target_id, days2sec=86400, On=True,
-               cuts_csv='../Databases/manual_cuts_TESS.csv', base_dir=None):
-    '''
+def manualCuts(
+    timeData,
+    fluxData,
+    fluxErr,
+    target_id,
+    days2sec=86400,
+    On=True,
+    cuts_csv=None,
+    base_dir_override=None,
+):
+    """
     Functionality:
         Interactive tool to apply and persist manual time-window cuts (in days) for a
         target. Existing cuts (if any) are applied first, then you may add more. All
@@ -6299,23 +6455,30 @@ def manualCuts(timeData, fluxData, fluxErr, target_id, days2sec=86400, On=True,
         target_id (str|int): Identifier used to lookup/store cuts in the CSV.
         days2sec (float, optional): Seconds per day. Default 86400.
         On (bool, optional): If False, returns inputs unchanged.
-        cuts_csv (str, optional): CSV path with columns ['ID','Cuts'] (ranges in days).
-        base_dir (str|pathlib.Path or None, optional): Root for resolving cuts_csv.
-
-    Returns:
-        (numpy.ndarray, numpy.ndarray, numpy.ndarray):
-            time_cut: Time after cuts.
-            flux_cut: Flux after cuts.
-            fluxErr_cut: Flux errors after cuts.
-    '''
+        cuts_csv (str|pathlib.Path|None, optional):
+            Path to the cuts CSV. If None, uses the default
+            UserGeneratedData/manual_cuts_TESS.csv under base_dir().
+        base_dir_override (str|pathlib.Path|None, optional):
+            Optional override for the workspace root (used only if cuts_csv is
+            a relative path and you want a custom base).
+    """
     if not On:
         print("Manual cuts disabled. Returning original data.")
         return timeData, fluxData, fluxErr
 
-    root = _resolve_base_dir(None)
-    cuts_path = (root / cuts_csv) if not os.path.isabs(cuts_csv) else Path(cuts_csv)
+    # --- Resolve cuts_path under the new architecture ---
+    if cuts_csv is None:
+        # Default: UserGeneratedData/manual_cuts_TESS.csv (writable)
+        cuts_path = p_user_data("manual_cuts_TESS.csv")
+    else:
+        cuts_path = Path(cuts_csv)
+        if not cuts_path.is_absolute():
+            root = Path(base_dir_override) if base_dir_override is not None else base_dir()
+            cuts_path = root / cuts_path
+
     _ensure_parent(cuts_path)
 
+    # --- Existing logic follows, unchanged except using cuts_path ---
     if cuts_path.exists():
         df = pd.read_csv(cuts_path, dtype={'ID': str, 'Cuts': str})
         df['ID'] = df['ID'].astype(str).str.strip()
@@ -6335,7 +6498,7 @@ def manualCuts(timeData, fluxData, fluxErr, target_id, days2sec=86400, On=True,
                 if len(parts) == 2:
                     try:
                         old_cuts_list.append([float(parts[0]), float(parts[1])])
-                    except:
+                    except Exception:
                         pass
             # Apply existing cuts
             for cut in old_cuts_list:
@@ -6357,7 +6520,7 @@ def manualCuts(timeData, fluxData, fluxErr, target_id, days2sec=86400, On=True,
         df = pd.concat([df, pd.DataFrame([{'ID': target_id_str, 'Cuts': ''}])], ignore_index=True)
         idx = df.index[df['ID'] == target_id_str][0]
 
-    # Interactive session
+    # Interactive session (unchanged)
     print("Beginning manual cut vetting...")
     daysData = (timeData[-1] - timeData[0]) / days2sec
     timeSpan = float(input(f"How many days at a time would you like to view? (Total: {daysData:.2f}): "))
@@ -6423,12 +6586,18 @@ def manualCuts(timeData, fluxData, fluxErr, target_id, days2sec=86400, On=True,
     return timeData, fluxData, fluxErr
 
 
-# creating non-interactive version of manualCuts: read an existing CSV and apply any cuts
-# creating non-interactive version of manualCuts: read an existing CSV and apply any cuts
-def apply_manual_cuts(timeData, fluxData, fluxErr, target_id,
-                      cuts_csv='../Databases/manual_cuts_TESS.csv',
-                      days2sec=86400, base_dir=None):
-    '''
+
+# Non-interactive version of manualCuts: read an existing CSV and apply any cuts
+def apply_manual_cuts(
+    timeData,
+    fluxData,
+    fluxErr,
+    target_id,
+    cuts_csv=None,
+    days2sec=86400,
+    base_dir_override=None,
+):
+    """
     Functionality:
         Apply pre-recorded manual time-window cuts to a target’s light curve using a
         CSV file (non-interactive). If the CSV does not exist, the target is not
@@ -6439,18 +6608,30 @@ def apply_manual_cuts(timeData, fluxData, fluxErr, target_id,
         fluxData (array-like): Flux values aligned with `timeData`.
         fluxErr (array-like): Flux uncertainties aligned with `timeData`.
         target_id (str|int): Target identifier used to look up cuts in the CSV.
-        cuts_csv (str, optional): Path to the cuts CSV. Default '../Databases/manual_cuts_TESS.csv'.
-        days2sec (float, optional): Seconds-per-day factor for converting cut values (which are stored in days).
-        base_dir (str|pathlib.Path or None, optional): If provided, `cuts_csv` is resolved relative to this directory.
+        cuts_csv (str|pathlib.Path|None, optional):
+            Path to the cuts CSV. If None, uses the default
+            UserGeneratedData/manual_cuts_TESS.csv under base_dir().
+        days2sec (float, optional):
+            Seconds-per-day factor for converting cut values (which are stored in days).
+        base_dir_override (str|pathlib.Path|None, optional):
+            If provided and `cuts_csv` is relative, it is resolved against this
+            directory instead of base_dir().
 
     Returns:
         (numpy.ndarray, numpy.ndarray, numpy.ndarray):
             time_out: Time array after applying cuts.
             flux_out: Flux array after applying cuts.
             fluxErr_out: Flux uncertainties after applying cuts.
-    '''
-    root = _resolve_base_dir(None)
-    cuts_path = (root / cuts_csv) if not os.path.isabs(cuts_csv) else Path(cuts_csv)
+    """
+    # --- Resolve cuts_path under the new architecture ---
+    if cuts_csv is None:
+        # Default: UserGeneratedData/manual_cuts_TESS.csv (writable, user-generated)
+        cuts_path = p_user_data("manual_cuts_TESS.csv")
+    else:
+        cuts_path = Path(cuts_csv)
+        if not cuts_path.is_absolute():
+            root = Path(base_dir_override) if base_dir_override is not None else base_dir()
+            cuts_path = root / cuts_path
 
     if not cuts_path.exists():
         print(f"CSV file {cuts_path} does not exist. Returning original data.")
@@ -6499,7 +6680,6 @@ def apply_manual_cuts(timeData, fluxData, fluxErr, target_id,
         return np.array([]), np.array([]), np.array([])
 
     return timeData, fluxData, fluxErr
-
 
 def write_or_update_csv(file_path, ID,
                         calc_mA, calc_mB, calc_rA, calc_rB,
@@ -10049,7 +10229,7 @@ def Detrending_RemoveCommonFalsePositives(timeArray, fluxArray, mission, ID, bas
     '''
     base_root = _resolve_base_dir(None)
 
-    cut_fp = base_root / "../Databases" / "common_false_positives.csv"
+    cut_fp = base_root / "../stanley/Databases" / "common_false_positives.csv"
     cutData = np.genfromtxt(
         cut_fp,
         comments="#", delimiter=',', unpack=False, names=True, skip_header=True
@@ -10057,7 +10237,7 @@ def Detrending_RemoveCommonFalsePositives(timeArray, fluxArray, mission, ID, bas
     cutStartArray = cutData['start']
     cutEndArray = cutData['end']
 
-    manual_cuts_filename = base_root / "../Databases" / "SpecificTargetCuts" / f"{mission}_{str(ID)}_manual_cuts.csv"
+    manual_cuts_filename = base_root / "../stanley/Databases" / "SpecificTargetCuts" / f"{mission}_{str(ID)}_manual_cuts.csv"
     if manual_cuts_filename.exists():
         print('Manual cuts found')
         cutData2 = np.genfromtxt(
@@ -11643,7 +11823,7 @@ def InjectTransits_David(
             mA, mB (kg), rA, rB (m), met (dex), frat (fB/fA).
         injection_type (str): One of {"random","manual","manual_wata","manual_tess",
                                       "archive_full_pileup","archive_sculpted","archive_raw"}.
-        injection_param_file (str, optional): CSV filename under ../Databases/
+        injection_param_file (str, optional): CSV filename under ../stanley/Databases/
             for manual_wata/manual_tess parameter sourcing.
         base_dir (str|pathlib.Path or None): Root of the repo/data tree. If None, uses CWD.
 
@@ -11659,11 +11839,11 @@ def InjectTransits_David(
     base_root = _resolve_base_dir(None)
 
     if (injection_type in {"archive_sculpted", "archive_full_pileup", "archive_raw"}):
-        exo_path = base_root / '../Databases' / 'exoplanet_archive.csv'
+        exo_path = base_root / '../stanley/Databases' / 'exoplanet_archive.csv'
         exoplanet_archive = Table.read(exo_path, delimiter=',', comment='#')
 
     if (injection_type == "manual_wata"):
-        p = base_root / '../Databases' / str(injection_param_file)
+        p = base_root / '../stanley/Databases' / str(injection_param_file)
         if os.path.isfile(p):
             inj_params = Table.read(p)
             if int(KIC) not in inj_params['KIC']:
@@ -11672,7 +11852,7 @@ def InjectTransits_David(
             injection_type = 'manual'
 
     if (injection_type == "manual_tess"):
-        p = base_root / '../Databases' / str(injection_param_file)
+        p = base_root / '../stanley/Databases' / str(injection_param_file)
         if os.path.isfile(p):
             inj_params = Table.read(p)
             if 'TIC' not in inj_params.colnames or int(KIC) not in inj_params['TIC']:
