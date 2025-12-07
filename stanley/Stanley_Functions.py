@@ -3665,7 +3665,8 @@ def detrend_ellipsoidal(
 
     # Optional plot
     if plot:
-        out_dir = "../LightCurves/Data_Preparation"
+        base_dir = _resolve_base_dir(None)
+        out_dir = os.path.join(base_dir, "LightCurves", "Data_Preparation")
         if detrending_name:
             out_dir = os.path.join(out_dir, detrending_name)
         os.makedirs(out_dir, exist_ok=True)
