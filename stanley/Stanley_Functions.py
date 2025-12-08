@@ -356,7 +356,8 @@ def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
 
     # Load in the orbit parameters from the Villanova Kepler Eclipsing Binary Catalog
     # http://keplerebs.villanova.edu/
-    orbit_data = np.genfromtxt("../stanley/Databases/villanova_orbit_data_kepler.csv", comments="#", delimiter=',', unpack=False)
+    orbit_data_path = p_databases("villanova_orbit_data_kepler.csv")
+    orbit_data = np.genfromtxt(orbit_data_path, comments="#", delimiter=",", unpack=False)
 
     print('Searching for orbit data in Villanova catalog')
     # Search rows for this KIC
@@ -405,7 +406,8 @@ def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
     else:
         # Attempt to load stellar data
         print('Searching for stellar data in Windemuth catalog')
-        stellar_data = np.genfromtxt("../stanley/Databases/windemuth_stellar_data.csv", comments="#", delimiter=' ', unpack=False)
+        stellar_data_path = p_databases("windemuth_stellar_data.csv")
+        stellar_data = np.genfromtxt(stellar_data_path, comments="#", delimiter=" ", unpack=False)
 
         # Find the right star by ID
         for ii in range(0, len(stellar_data)):
