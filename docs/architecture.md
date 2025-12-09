@@ -1,6 +1,6 @@
 # Architecture & data layout
 
-This page describes how the STANLEY package is organized and where it expects
+This page describes how the Stanley package is organized and where it expects
 to find and write data on disk. The goal is to make it easy to understand
 what lives where and how the pieces talk to each other.
 
@@ -10,11 +10,11 @@ what lives where and how the pieces talk to each other.
 
 At the top level of the repository you will see:
 
-- `stanley/`  
+- `stanley_cbp/`  
   The Python package that implements the pipeline.
 
 - `Tutorials/`  
-  Example notebooks that show how to run STANLEY on real systems and on
+  Example notebooks that show how to run Stanley on real systems and on
   simple demonstration cases.
 
 - `docs/`  
@@ -28,14 +28,14 @@ At the top level of the repository you will see:
   Front-page description, license, and contribution guidelines.
 
 Other files such as `bump_version.py`, `.gitignore`, `dist/`, and
-`stanley.egg-info/` are support files created during development and
+`stanley_cbp.egg-info/` are support files created during development and
 packaging.
 
 ---
 
-## Inside the `stanley` package
+## Inside the `stanley_cbp` package
 
-The `stanley/` package is split into logical pieces. File names and exact
+The `stanley_cbp/` package is split into logical pieces. File names and exact
 boundaries may change over time, but the roles are:
 
 - **Configuration and paths**  
@@ -78,7 +78,7 @@ boundaries may change over time, but the roles are:
 
 ## Data layout on disk
 
-STANLEY works inside a single **base directory**. By default this is the
+Stanley works inside a single **base directory**. By default this is the
 folder that contains your notebook or script, but you can also set it
 manually. All input and output folders live under this base directory.
 
@@ -114,7 +114,7 @@ subfolders.
 
 ## How the pieces fit together
 
-A typical run of STANLEY follows these steps:
+A typical run of Stanley follows these steps:
 
 1. **Set the base directory**  
    Your notebook or script selects a base directory. All later steps read
@@ -143,9 +143,9 @@ A typical run of STANLEY follows these steps:
 6. **Tutorials and scripts**  
    The notebooks in `Tutorials/` are thin wrappers around the package.
    They configure paths and parameters, then call the public functions
-   from `stanley/` so that the same code can be used both in tutorials and
+   from `stanley_cbp/` so that the same code can be used both in tutorials and
    in research projects.
 
 This structure is intended to keep code, configuration, and data clearly
-separated while still making it easy to run STANLEY on new systems or on
+separated while still making it easy to run Stanley on new systems or on
 large samples of binaries.

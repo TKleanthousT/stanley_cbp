@@ -19,11 +19,11 @@ Use: pip install stanley_cbp
 This installs the latest published version of Stanley and all required dependencies.
 
 # Installing from a Local Wheel
-If you have a locally built wheel (for example, stanley-0.1.X-py3-none-any.whl), install it with: pip install dist/stanley_cbp-0.1.X-py3-none-any.whl
+If you have a locally built wheel (for example, stanley_cbp-0.1.X-py3-none-any.whl), install it with: pip install dist/stanley_cbp-0.1.X-py3-none-any.whl
 Replace 0.1.X with the correct version number.
 
 # Verifying the Installation
-Check that Stanley imports correctly: python -c "import stanley_cbp; print(stanley.version)"
+Check that Stanley imports correctly: python -c "import stanley_cbp; print(stanley_cbp.version)"
 If this prints a version number without errors, the installation succeeded.
 
 # Optional: Using Jupyter Notebooks
@@ -31,8 +31,8 @@ If you want to run the Tutorials notebooks, install Jupyter inside your environm
 Then launch Jupyter from inside the Tutorials directory: jupyter lab or jupyter notebook
 
 # What Gets Installed
-- The Python package stanley
-- All required static catalogs stored inside stanley/Databases/
+- The Python package stanley_cbp
+- All required static catalogs stored inside stanley_cbp/Databases/
 - All package dependencies
 No external data downloads are required.
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J stanley-run                   # Job name
+#SBATCH -J stanley_cbp-run                   # Job name
 #SBATCH -N 1                             # Nodes
 #SBATCH -p batch                         # Partition/queue (edit as needed)
 #SBATCH -n 1                             # Tasks per node
@@ -42,8 +42,8 @@ TIC_ID="${TargetList[$index]}"
 mkdir -p "${LOG_DIR}"
 
 # Manual stdout/stderr redirection
-exec >  "${LOG_DIR}/stanley-${RUN_TAG}-out-${TIC_ID}.txt" \
-     2> "${LOG_DIR}/stanley-${RUN_TAG}-err-${TIC_ID}.txt"
+exec >  "${LOG_DIR}/stanley_cbp-${RUN_TAG}-out-${TIC_ID}.txt" \
+     2> "${LOG_DIR}/stanley_cbp-${RUN_TAG}-err-${TIC_ID}.txt"
 
 echo "[INFO $(date +'%F %T')] Starting job for TIC${TIC_ID}"
 
@@ -70,7 +70,7 @@ SEARCH_NAME="${SEARCHBASE}${TIC_ID}"
 echo "[INFO $(date +'%F %T')] Running detrending..."
 python Stanley_Detrending.py \
     --systemName="${SYSTEM_ARG}" \
-    --detrendingName="${DETRENDRING_NAME}" \
+    --detrendingName="${DETREND_NAME}" \
     --useSavedData=0
 
 echo "[INFO $(date +'%F %T')] Running planet search..."

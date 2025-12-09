@@ -33,10 +33,10 @@ Stanley was first validated on the **Kepler** circumbinary-planet sample, where 
 
 ## Repository Structure and Data Requirements
 
-This repository contains only the core **source code** (`stanley/`).  
+This repository contains only the core **source code** (`stanley_cbp/`).  
 All static catalogs needed at runtime are packaged inside:
 
-    stanley/Databases/
+    stanley_cbp/Databases/
 
 Users do **not** need to download any external data or set a STANLEY_BASE environment variable.
 
@@ -75,7 +75,7 @@ analysis_out = runAnalysisModule(searchName="DemoSearch", systemName="TIC2601283
 A `Tutorials/` directory is provided with example Jupyter notebooks.  
 These notebooks assume:
 
-- a local **stanley** installation,  
+- a local **stanley_cbp** installation,  
 - that the directory where the notebook is run will automatically function as the runtime workspace,  
 - and that Stanley will generate all required folders (`LightCurves/`, `PlanetSearchOutput/`, `DiagnosticReports/`, `UserGeneratedData/`) as needed.
 

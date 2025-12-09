@@ -38,11 +38,11 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["stanley*"]
+include = ["stanley_cbp*"]
 exclude = ["LightCurves*", "PlanetSearchOutput*", "scripts_output*"]
 
 [tool.setuptools.package-data]
-stanley = [
+stanley_cbp = [
   "Databases/*.csv",
   "Databases/*/*.csv"
 ]

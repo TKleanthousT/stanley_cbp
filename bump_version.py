@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Simple version bump script for stanley.
+Simple version bump script for stanley_cbp.
 
 Usage:
     python bump_version.py           # bump patch (0.1.52 -> 0.1.53)
@@ -15,7 +15,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent
 PYPROJECT = ROOT / "pyproject.toml"
-INIT_FILE = ROOT / "stanley" / "__init__.py"
+INIT_FILE = ROOT / "stanley_cbp" / "__init__.py"
 
 
 def parse_current_version(pyproject_text: str) -> tuple[int, int, int]:
@@ -59,7 +59,7 @@ def update_pyproject(py_text: str, new_version: str) -> str:
 
 def update_init(init_text: str, new_version: str) -> str:
     """
-    Update or add __version__ in stanley/__init__.py.
+    Update or add __version__ in stanley_cbp/__init__.py.
     """
     if "__version__" in init_text:
         return re.sub(
@@ -94,7 +94,7 @@ def main():
     py_text_new = update_pyproject(py_text, new_version)
     PYPROJECT.write_text(py_text_new, encoding="utf-8")
 
-    # Update stanley/__init__.py
+    # Update stanley_cbp/__init__.py
     init_text = INIT_FILE.read_text(encoding="utf-8")
     init_text_new = update_init(init_text, new_version)
     INIT_FILE.write_text(init_text_new, encoding="utf-8")

@@ -1,5 +1,5 @@
 """
-Static database files packaged with STANLEY.
+Static database files packaged with Stanley.
 
 This directory contains CSV tables used throughout the pipeline, including:
 - exoplanet archive samples
@@ -9,7 +9,7 @@ This directory contains CSV tables used throughout the pipeline, including:
 - filtering and masking helpers
 
 Files in this directory are accessed via:
-    importlib.resources.files("stanley.Databases")
+    importlib.resources.files("stanley_cbp.Databases")
 """
 
 # No imports needed — files are accessed via p_databases() or importlib.resources

@@ -20,7 +20,7 @@ from astroquery.mast import Catalogs
 # PACKAGE / REPO DUAL-MODE INTERNAL IMPORTS (FIXED)
 # ------------------------------------------------------------
 try:
-    # package mode: stanley.Stanley_TransitTiming, stanley.Stanley_Constants
+    # package mode: stanley_cbp.Stanley_TransitTiming, stanley_cbp.Stanley_Constants
     from . import Stanley_TransitTiming as SSTT
     from .Stanley_Constants import *
 except ImportError:
@@ -55,20 +55,22 @@ import os
 from importlib import resources
 
 
-def _resolve_base_dir(base_dir=None) -> Path:
+
+def _resolve_base_dir(base_dir: str | os.PathLike | None = None) -> Path:
     """
-    Resolve the Stanley project root used for user generated products.
+    Resolve the project root used for user-generated products.
 
     Priority:
       1) explicit base_dir arg
-      2) STANLEY_BASE_DIR env var
+      2) STANLEY_CBP_BASE_DIR or STANLEY_BASE_DIR env var
       3) walk upward from this file until we find LightCurves/ or PlanetSearchOutput/
       4) fallback: current working directory
     """
     if base_dir:
         return Path(base_dir).expanduser().resolve()
 
-    env = os.getenv("STANLEY_BASE_DIR")
+    # Support both the new and old env var names (for safety)
+    env = os.getenv("STANLEY_CBP_BASE_DIR") or os.getenv("STANLEY_BASE_DIR")
     if env:
         return Path(env).expanduser().resolve()
 
@@ -76,47 +78,56 @@ def _resolve_base_dir(base_dir=None) -> Path:
     anchors = ("LightCurves", "PlanetSearchOutput")
 
     for p in here.parents:
+        # Stop if we're in an installed site-packages tree
         if p.name.lower() in {"site-packages", "dist-packages"}:
             break
-        if p.name == "stanley":
+        # Skip the package directory itself (stanley_cbp/)
+        if p.name == "stanley_cbp":
             continue
+        # Use the first parent that contains LightCurves/ or PlanetSearchOutput/
         if any((p / a).exists() for a in anchors):
             return p.resolve()
 
+    # Fallback: current working directory
     return Path.cwd().resolve()
+
 
 def base_dir() -> Path:
     return _resolve_base_dir(None)
 
+
 def p_outputs(search_name: str, *parts) -> Path:
     return base_dir() / "PlanetSearchOutput" / search_name / Path(*parts)
+
 
 def p_lightcurves(*parts) -> Path:
     return base_dir() / "LightCurves" / Path(*parts)
 
+
 def p_processed(det_name: str, *parts) -> Path:
     return p_lightcurves("Processed", det_name, *parts)
+
 
 def p_databases(*parts) -> Path:
     """
     Return a path to a file inside the packaged Databases directory.
 
     Works when:
-    - stanley is installed via pip (Databases shipped inside the wheel)
-    - running from a source checkout (fallback to legacy layout)
+    - stanley_cbp is installed via pip (Databases shipped inside the wheel)
+    - running from a source checkout (fallback to source-tree layout)
     """
 
     relative = Path(*parts)
 
     # 1. Try to load packaged data (site-packages)
     try:
-        db_root = resources.files("stanley.Databases")
+        db_root = resources.files("stanley_cbp.Databases")
         return Path(db_root) / relative
     except Exception:
         pass
 
-    # 2. Fallback: user is running from a source tree with top-level Databases/
-    return base_dir() / "stanley" / "Databases" / relative
+    # 2. Fallback: user is running from a source tree with Databases inside the package
+    return base_dir() / "stanley_cbp" / "Databases" / relative
 
 
 def p_user_data(*parts) -> Path:
@@ -125,10 +136,8 @@ def p_user_data(*parts) -> Path:
     inside the *working directory of the tutorial*,
     NOT inside the installed package or source.
     """
-    # new base = the workspace directory
-    root = base_dir() # this already points to the tutorial folder
+    root = base_dir()
     return root / "UserGeneratedData" / Path(*parts)
-
 
 def _ensure_parent(path: Path):
     """
@@ -10230,9 +10239,7 @@ def Detrending_RemoveCommonFalsePositives(timeArray, fluxArray, mission, ID, bas
             timeArray_clean (np.ndarray): Time array with known-bad intervals removed.
             fluxArray_clean (np.ndarray): Flux array with those intervals removed.
     '''
-    base_root = _resolve_base_dir(None)
-
-    cut_fp = base_root / "../stanley/Databases" / "common_false_positives.csv"
+    cut_fp = p_databases("common_false_positives.csv")
     cutData = np.genfromtxt(
         cut_fp,
         comments="#", delimiter=',', unpack=False, names=True, skip_header=True
@@ -10240,7 +10247,7 @@ def Detrending_RemoveCommonFalsePositives(timeArray, fluxArray, mission, ID, bas
     cutStartArray = cutData['start']
     cutEndArray = cutData['end']
 
-    manual_cuts_filename = base_root / "../stanley/Databases" / "SpecificTargetCuts" / f"{mission}_{str(ID)}_manual_cuts.csv"
+    manual_cuts_filename = p_databases("SpecificTargetCuts", f"{mission}_{ID}_manual_cuts.csv")
     if manual_cuts_filename.exists():
         print('Manual cuts found')
         cutData2 = np.genfromtxt(
@@ -11826,7 +11833,7 @@ def InjectTransits_David(
             mA, mB (kg), rA, rB (m), met (dex), frat (fB/fA).
         injection_type (str): One of {"random","manual","manual_wata","manual_tess",
                                       "archive_full_pileup","archive_sculpted","archive_raw"}.
-        injection_param_file (str, optional): CSV filename under ../stanley/Databases/
+        injection_param_file (str, optional): CSV filename under ../stanley_cbp/Databases/
             for manual_wata/manual_tess parameter sourcing.
         base_dir (str|pathlib.Path or None): Root of the repo/data tree. If None, uses CWD.
 
@@ -11842,11 +11849,11 @@ def InjectTransits_David(
     base_root = _resolve_base_dir(None)
 
     if (injection_type in {"archive_sculpted", "archive_full_pileup", "archive_raw"}):
-        exo_path = base_root / '../stanley/Databases' / 'exoplanet_archive.csv'
+        exo_path = base_root / '../stanley_cbp/Databases' / 'exoplanet_archive.csv'
         exoplanet_archive = Table.read(exo_path, delimiter=',', comment='#')
 
     if (injection_type == "manual_wata"):
-        p = base_root / '../stanley/Databases' / str(injection_param_file)
+        p = base_root / '../stanley_cbp/Databases' / str(injection_param_file)
         if os.path.isfile(p):
             inj_params = Table.read(p)
             if int(KIC) not in inj_params['KIC']:
@@ -11855,7 +11862,7 @@ def InjectTransits_David(
             injection_type = 'manual'
 
     if (injection_type == "manual_tess"):
-        p = base_root / '../stanley/Databases' / str(injection_param_file)
+        p = base_root / '../stanley_cbp/Databases' / str(injection_param_file)
         if os.path.isfile(p):
             inj_params = Table.read(p)
             if 'TIC' not in inj_params.colnames or int(KIC) not in inj_params['TIC']:
