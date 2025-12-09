@@ -1,0 +1,21 @@
+name: stanley_env
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.9
+  - numpy>=1.26
+  - scipy>=1.13
+  - astropy>=6.0
+  - matplotlib>=3.8
+  - pandas>=2.2
+  - numba>=0.59
+  - lightkurve>=2.4
+  - rebound>=4.4
+  - batman-package>=2.4
+  - pyastronomy>=0.21
+  - wotan>=1.10
+  - jupyterlab
+  - pip
+  - pip:
+      - oktopus
+      - ldtk

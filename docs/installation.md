@@ -4,7 +4,7 @@ This page explains how to install the Stanley pipeline in a clean and reliable w
 # Requirements
 - Python ≥ 3.9
 - A working scientific Python stack (NumPy, SciPy, pandas)
-- Recommended: a conda or venv environment
+- Recommended: a conda or venv environment (a base environment.yml file is included at the top level of the repository)
 - Internet connection for installing dependencies
 
 # Creating an Environment (Recommended)
