@@ -1,22 +1,27 @@
 name: stanley_env
 channels:
-  - conda-forge
   - defaults
 dependencies:
   - python=3.9
-  - numpy=1.26
-  - scipy=1.13
-  - astropy=6.0
-  - matplotlib=3.8
-  - pandas=2.2
-  - numba=0.59
-  - lightkurve=2.4
-  - batman-package=2.4
-  - pip
+  - pip=24.0
   - pip:
-      - oktopus
-      - ldtk
-      - rebound==4.4
-      - pyastronomy==0.21
-      - wotan==1.10
-      - jupyterlab
+    - numpy==1.26.4
+    - scipy==1.13.1
+    - astropy==6.0.1
+    - batman-package==2.4.9
+    - lightkurve==2.4.2
+    - numba==0.59.1
+    - matplotlib==3.9.0
+    - pandas==2.2.2
+    - rebound==4.4.1
+    - pyastronomy==0.21.0
+    - wotan==1.10
+    - ldtk==1.8.4
+    - oktopus==0.1.2
+    - jupyterlab==4.2.0
+    # plus any extras from the old env you actually use:
+    # - ipykernel==6.29.4
+    # - ipython==8.18.1
+    # - scikit-learn==1.5.0
+    # - bokeh==3.4.1
+    # etc.
