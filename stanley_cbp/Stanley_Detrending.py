@@ -256,7 +256,7 @@ def runDetrendingModule(
 
         if mission == 'TIC':
             TIC_val = ID
-            timeFinal, fluxFinal = AC.InjectTransits_David(
+            timeFinal, fluxFinal = AC.InjectTransits(
                 timeFinal, fluxFinal,
                 KIC=TIC_val, DetrendingName=DetrendingName,
                 orbit_params=orbit_params, stellar_params=stellar_params,
@@ -265,7 +265,7 @@ def runDetrendingModule(
             )
         else:
             print('entering manual_wata injection type')
-            timeFinal, fluxFinal = AC.InjectTransits_David(
+            timeFinal, fluxFinal = AC.InjectTransits(
                 timeFinal, fluxFinal,
                 KIC=ID, DetrendingName=DetrendingName,
                 orbit_params=orbit_params, stellar_params=stellar_params,

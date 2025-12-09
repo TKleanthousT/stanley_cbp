@@ -11808,7 +11808,7 @@ def Detrending_IterativeCosine2(
 
     return timeCosineFiltered, fluxCosineFiltered, trendCosineFiltered, listTime, listFlux
 
-def InjectTransits_David(
+def InjectTransits(
     timeArray, fluxArray, KIC, DetrendingName,
     orbit_params, stellar_params, injection_type,
     injection_param_file=None, base_dir=None
