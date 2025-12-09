@@ -50,16 +50,16 @@ Instead, when running the pipeline (typically from the `Tutorials/` folder), Sta
 These folders are created in the same directory from which the user runs the notebook or script (e.g.,`Tutorials/`), and no manual setup is required.
 
 ## Installation
-Install from PyPI (future release): pip install stanley
+Install from PyPI (future release): pip install stanley_cbp
 
-Or install from a locally built wheel: pip install dist/stanley-0.1.X-py3-none-any.whl
+Or install from a locally built wheel: pip install dist/stanley_cbp-0.1.X-py3-none-any.whl
 
 ## Using Stanley in Python
 
 Example workflow:
 
 **Import:**  
-from stanley import runDetrendingModule, Stanley_FindPlanets, runAnalysisModule
+from stanley_cbp import runDetrendingModule, Stanley_FindPlanets, runAnalysisModule
 
 **Detrending example:**  
 result_det = runDetrendingModule(SystemName="TIC260128333", DetrendingName="DemoDetrend", UseSavedData=0)
