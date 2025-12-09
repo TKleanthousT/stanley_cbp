@@ -74,7 +74,7 @@ python Stanley_Detrending.py \
     --useSavedData=0
 
 echo "[INFO $(date +'%F %T')] Running planet search..."
-python Stanley_PlanetSearch_InterpN.py \
+python Stanley_PlanetSearch_InterpN_DebugPadding.py \
     --systemName="${SYSTEM_ARG}" \
     --searchName="${SEARCH_NAME}" \
     --detrendingName="${DETREND_NAME}" \

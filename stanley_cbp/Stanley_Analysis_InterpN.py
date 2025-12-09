@@ -416,20 +416,54 @@ def runAnalysisModule(
 # CLI entry point (cluster usage)
 # -------------------------------
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--searchName", type=str, help="Unique identifier for the simulation", default='Needs a name')
-    parser.add_argument("--systemName", type=str, help="Name of the system (e.g. Kepler 16)", default='Kepler 16')
-    parser.add_argument("--totalSectors", type=int, help="Total sectors used to split the search", default=1)
-    parser.add_argument("--currentSector", type=int, help="Current search sector (unused here)", default=1)
-    parser.add_argument("--onCluster", type=bool, help="Are we on a cluster?", default=False)
+    parser = argparse.ArgumentParser(
+        description="Run STANLEY analysis module on completed search output."
+    )
+    parser.add_argument(
+        "--searchName",
+        type=str,
+        help="Unique identifier for the simulation / search run.",
+        default="Needs a name",
+    )
+    parser.add_argument(
+        "--systemName",
+        type=str,
+        help="Name of the system (e.g. Kepler-16, TIC123...).",
+        default="Kepler 16",
+    )
+    parser.add_argument(
+        "--totalSectors",
+        type=int,
+        help="Total sectors used to split the search.",
+        default=1,
+    )
+    parser.add_argument(
+        "--currentSector",
+        type=int,
+        help="Current search sector (if relevant to your analysis; otherwise ignored).",
+        default=1,
+    )
+    parser.add_argument(
+        "--onCluster",
+        type=int,
+        choices=[0, 1],
+        help="Are we on a cluster? (0/1)",
+        default=0,
+    )
+
     args = parser.parse_args()
 
     print(f"[{datetime.datetime.now()}] Analysis start with args: {args}", flush=True)
+
     out = runAnalysisModule(
         searchName=args.searchName,
         systemName=args.systemName,
         totalSectors=args.totalSectors,
         currentSector=args.currentSector,
-        onCluster=args.onCluster
+        onCluster=bool(args.onCluster),
     )
-    print(f"[{datetime.datetime.now()}] Analysis end. Result: {out.get('status','unknown')}", flush=True)
+
+    print(
+        f"[{datetime.datetime.now()}] Analysis end. Result: {out.get('status', 'unknown')}",
+        flush=True,
+    )
