@@ -10,12 +10,12 @@ dependencies:
   - pandas>=2.2
   - numba>=0.59
   - lightkurve>=2.4
-  - rebound>=4.4
   - batman-package>=2.4
-  - pyastronomy>=0.21
-  - wotan>=1.10
   - jupyterlab
   - pip
   - pip:
+      - rebound>=4.4
+      - pyastronomy>=0.21
+      - wotan>=1.10
       - oktopus
       - ldtk
