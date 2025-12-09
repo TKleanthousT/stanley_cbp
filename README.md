@@ -79,8 +79,7 @@ These notebooks assume:
 - that the directory where the notebook is run will automatically function as the runtime workspace,  
 - and that Stanley will generate all required folders (`LightCurves/`, `PlanetSearchOutput/`, `DiagnosticReports/`, `UserGeneratedData/`) as needed.
 
-The tutorials demonstrate detrending, running the CBP search, interpreting outputs,  
-and generating diagnostic figures.
+The tutorials demonstrate detrending, running the CBP search, interpreting outputs, and generating diagnostic figures.
 
 ## Licensing
 
