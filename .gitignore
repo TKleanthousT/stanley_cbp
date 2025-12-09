@@ -23,3 +23,10 @@ Databases/*
 *.log
 *.out
 *.err
+
+# Editor configs
+.vscode/
+
+# OS-specific trash
+.DS_Store
+Thumbs.db
