@@ -8979,7 +8979,7 @@ def MassRadiusTemperatureRelation(mass, radius):
     Returns:
         float: Effective temperature [K].
     '''
-    # You input the mass and radius; luminosity via Eker+2015 → Teff via σT^4
+    # You input the mass and radius; luminosity via Eker+2015 -> Teff via σT^4
     L = MassRadiusLuminosityRelation(mass, radius)  # solar luminosity
     Teff = 5777 * (L / (radius / rSun_m)**2.)**(1. / 4.)
     return Teff  # Kelvin
