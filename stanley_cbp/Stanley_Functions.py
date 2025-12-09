@@ -55,58 +55,79 @@ import os
 from importlib import resources
 
 
-
-def _resolve_base_dir(base_dir: str | os.PathLike | None = None) -> Path:
+def _resolve_base_dir(base_dir=None) -> Path:
     """
-    Resolve the project root used for user-generated products.
+    Resolve the *workspace root* used for user-generated products.
 
     Priority:
       1) explicit base_dir arg
-      2) STANLEY_CBP_BASE_DIR or STANLEY_BASE_DIR env var
-      3) walk upward from this file until we find LightCurves/ or PlanetSearchOutput/
-      4) fallback: current working directory
+      2) STANLEY_WORKDIR (new), or STANLEY_CBP_BASE_DIR / STANLEY_BASE_DIR (backwards compat)
+      3) current working directory (Jupyter / local scripts)
     """
     if base_dir:
         return Path(base_dir).expanduser().resolve()
 
-    # Support both the new and old env var names (for safety)
-    env = os.getenv("STANLEY_CBP_BASE_DIR") or os.getenv("STANLEY_BASE_DIR")
+    # New preferred env var, plus backwards-compatible ones
+    env = (
+        os.getenv("STANLEY_WORKDIR")
+        or os.getenv("STANLEY_CBP_BASE_DIR")
+        or os.getenv("STANLEY_BASE_DIR")
+    )
     if env:
         return Path(env).expanduser().resolve()
 
-    here = Path(__file__).resolve()
-    anchors = ("LightCurves", "PlanetSearchOutput")
-
-    for p in here.parents:
-        # Stop if we're in an installed site-packages tree
-        if p.name.lower() in {"site-packages", "dist-packages"}:
-            break
-        # Skip the package directory itself (stanley_cbp/)
-        if p.name == "stanley_cbp":
-            continue
-        # Use the first parent that contains LightCurves/ or PlanetSearchOutput/
-        if any((p / a).exists() for a in anchors):
-            return p.resolve()
-
-    # Fallback: current working directory
+    # Default: wherever the user is running from
     return Path.cwd().resolve()
 
 
 def base_dir() -> Path:
+    """
+    Workspace root where LightCurves, PlanetSearchOutput,
+    UserGeneratedData, DiagnosticReports, etc. live.
+
+    - In notebooks: the notebook directory (cwd).
+    - On cluster: whatever the SLURM script sets via STANLEY_WORKDIR.
+    """
     return _resolve_base_dir(None)
 
+# ---------------------------
+# Output / workspace paths
+# ---------------------------
 
 def p_outputs(search_name: str, *parts) -> Path:
+    """
+    Planet search output directory for a given search_name.
+    """
     return base_dir() / "PlanetSearchOutput" / search_name / Path(*parts)
 
 
 def p_lightcurves(*parts) -> Path:
+    """
+    Root for LightCurves products under the workspace.
+    """
     return base_dir() / "LightCurves" / Path(*parts)
 
 
 def p_processed(det_name: str, *parts) -> Path:
+    """
+    Processed light curve products grouped by detrending name.
+    """
     return p_lightcurves("Processed", det_name, *parts)
 
+
+def p_user_data(*parts) -> Path:
+    """
+    Places user-generated files (manual cuts, injection CSVs, etc.)
+    inside the workspace's UserGeneratedData directory.
+
+    - In notebooks: <notebook-dir>/UserGeneratedData
+    - On cluster:  <RUN_ROOT>/UserGeneratedData
+    """
+    return base_dir() / "UserGeneratedData" / Path(*parts)
+
+# ---------------------------
+# Packaged databases
+# ---------------------------
 
 def p_databases(*parts) -> Path:
     """
@@ -116,32 +137,24 @@ def p_databases(*parts) -> Path:
     - stanley_cbp is installed via pip (Databases shipped inside the wheel)
     - running from a source checkout (fallback to source-tree layout)
     """
-
     relative = Path(*parts)
 
-    # 1. Try to load packaged data (site-packages)
+    # 1. Try to load packaged data (site-packages / wheel)
     try:
         db_root = resources.files("stanley_cbp.Databases")
         return Path(db_root) / relative
     except Exception:
         pass
 
-    # 2. Fallback: user is running from a source tree with Databases inside the package
-    return base_dir() / "stanley_cbp" / "Databases" / relative
+    # 2. Fallback: user is running from a source tree with Databases
+    #    alongside this module inside the package.
+    pkg_root = Path(__file__).resolve().parent  # e.g. stanley_cbp/
+    return pkg_root / "Databases" / relative
 
-
-def p_user_data(*parts) -> Path:
-    """
-    Places user-generated files (manual cuts, injection CSVs)
-    inside the *working directory of the tutorial*,
-    NOT inside the installed package or source.
-    """
-    root = base_dir()
-    return root / "UserGeneratedData" / Path(*parts)
 
 def _ensure_parent(path: Path):
     """
-    Simply ensure that the parent directory exists.
+    Ensure that the parent directory exists.
     Does not create the file itself.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -6469,10 +6482,11 @@ def manualCuts(
         On (bool, optional): If False, returns inputs unchanged.
         cuts_csv (str|pathlib.Path|None, optional):
             Path to the cuts CSV. If None, uses the default
-            UserGeneratedData/manual_cuts_TESS.csv under base_dir().
+            UserGeneratedData/manual_cuts_TESS.csv under the workspace root
+            (base_dir()).
         base_dir_override (str|pathlib.Path|None, optional):
-            Optional override for the workspace root (used only if cuts_csv is
-            a relative path and you want a custom base).
+            Optional override for the workspace root when cuts_csv is relative.
+            If None, relative paths are resolved against base_dir().
     """
     if not On:
         print("Manual cuts disabled. Returning original data.")
@@ -6480,7 +6494,7 @@ def manualCuts(
 
     # --- Resolve cuts_path under the new architecture ---
     if cuts_csv is None:
-        # Default: UserGeneratedData/manual_cuts_TESS.csv (writable)
+        # Default: UserGeneratedData/manual_cuts_TESS.csv (writable, workspace-scoped)
         cuts_path = p_user_data("manual_cuts_TESS.csv")
     else:
         cuts_path = Path(cuts_csv)
@@ -6599,7 +6613,7 @@ def manualCuts(
 
 
 
-# Non-interactive version of manualCuts: read an existing CSV and apply any cuts
+
 def apply_manual_cuts(
     timeData,
     fluxData,
@@ -6622,7 +6636,8 @@ def apply_manual_cuts(
         target_id (str|int): Target identifier used to look up cuts in the CSV.
         cuts_csv (str|pathlib.Path|None, optional):
             Path to the cuts CSV. If None, uses the default
-            UserGeneratedData/manual_cuts_TESS.csv under base_dir().
+            UserGeneratedData/manual_cuts_TESS.csv under the workspace root
+            (base_dir()).
         days2sec (float, optional):
             Seconds-per-day factor for converting cut values (which are stored in days).
         base_dir_override (str|pathlib.Path|None, optional):
@@ -6637,7 +6652,7 @@ def apply_manual_cuts(
     """
     # --- Resolve cuts_path under the new architecture ---
     if cuts_csv is None:
-        # Default: UserGeneratedData/manual_cuts_TESS.csv (writable, user-generated)
+        # Default: workspace/UserGeneratedData/manual_cuts_TESS.csv
         cuts_path = p_user_data("manual_cuts_TESS.csv")
     else:
         cuts_path = Path(cuts_csv)
@@ -6693,21 +6708,25 @@ def apply_manual_cuts(
 
     return timeData, fluxData, fluxErr
 
-def write_or_update_csv(file_path, ID,
-                        calc_mA, calc_mB, calc_rA, calc_rB,
-                        calc_ecc, calc_omega,
-                        antic_mA, antic_mB, antic_rA, antic_rB, eccANTIC, omegaANTIC,
-                        eccNoAssump, omegaNoAssump, ecoswNoAssump, esinwNoAssump,
-                        antic_ecosw, antic_esinw, num_sectors,
-                        base_dir=None):
-    '''
+
+def write_or_update_csv(
+    file_path, ID,
+    calc_mA, calc_mB, calc_rA, calc_rB,
+    calc_ecc, calc_omega,
+    antic_mA, antic_mB, antic_rA, antic_rB, eccANTIC, omegaANTIC,
+    eccNoAssump, omegaNoAssump, ecoswNoAssump, esinwNoAssump,
+    antic_ecosw, antic_esinw, num_sectors,
+    base_dir=None,
+):
+    """
     Functionality:
         Create or update a CSV entry for a target, storing both calculated and ANTIC
         parameter estimates. If the file does not exist, a header is created. If the
         target already exists, its row is replaced.
 
     Arguments:
-        file_path (str): Path to output CSV. Relative paths are resolved via `base_dir`.
+        file_path (str): Path to output CSV. If relative, it is resolved against
+            `base_dir` if provided, otherwise against the workspace root (base_dir()).
         ID (str|int): Target identifier used as row key.
         calc_* (floats): Calculated masses/radii/eccentricity/omega values.
         antic_* (floats): ANTIC catalog masses/radii/eccentricity/omega values.
@@ -6717,9 +6736,17 @@ def write_or_update_csv(file_path, ID,
 
     Returns:
         None
-    '''
-    root = _resolve_base_dir(None)
-    out_path = (root / file_path) if not os.path.isabs(file_path) else Path(file_path)
+    """
+    # Resolve the root for relative paths: explicit base_dir > workspace base_dir()
+    if base_dir is not None:
+        root = Path(base_dir).expanduser().resolve()
+    else:
+        root = base_dir()  # workspace root (cwd or STANLEY_WORKDIR)
+
+    out_path = Path(file_path)
+    if not out_path.is_absolute():
+        out_path = root / out_path
+
     _ensure_parent(out_path)
 
     header = [
@@ -6757,6 +6784,7 @@ def write_or_update_csv(file_path, ID,
 
     with out_path.open("w", newline="") as f:
         csv.writer(f).writerows(rows)
+
 
 
 # Primary star parameter retrieval with retries & sanity checks
