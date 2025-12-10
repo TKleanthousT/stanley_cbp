@@ -11899,6 +11899,7 @@ def InjectTransits(
     '''
 
     base_root = _resolve_base_dir(None)
+    _ = p_user_data()
 
     if (injection_type in {"archive_sculpted", "archive_full_pileup", "archive_raw"}):
         exo_path = base_root / '../stanley_cbp/Databases' / 'exoplanet_archive.csv'
