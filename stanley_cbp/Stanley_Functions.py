@@ -12975,6 +12975,7 @@ def create_detrending_diagnostic_report(
         root = base_root
     else:
         # p_lightcurves() returns <root>/LightCurves
+        lc_root = p_lightcurves()
         root = lc_root.parent
 
     diag_dir = root / "DiagnosticReports"
