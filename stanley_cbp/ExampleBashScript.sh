@@ -67,11 +67,11 @@ cd "${WORK_DIR}"
 echo "[INFO] Working directory (STANLEY_WORKDIR): ${WORK_DIR}"
 
 python - << 'EOF'
-from stanley_cbp.paths import base_dir, p_lightcurves, p_user_data, p_outputs
-print("base_dir():", base_dir())
-print("LightCurves root:", p_lightcurves())
-print("UserGeneratedData root:", p_user_data(""))
-print("PlanetSearchOutput root:", p_outputs("TEST_SEARCH"))
+from stanley_cbp import Stanley_Functions as AC
+print("base_dir():", AC.base_dir())
+print("LightCurves root:", AC.p_lightcurves())
+print("UserGeneratedData root:", AC.p_user_data(""))
+print("PlanetSearchOutput root:", AC.p_outputs("TEST_SEARCH"))
 EOF
 
 # ===============================
@@ -114,4 +114,3 @@ python -m stanley_cbp.Stanley_Analysis_InterpN \
     --onCluster=1
 
 echo "[INFO $(date +'%F %T')] Completed TIC${TIC_ID}"
-
