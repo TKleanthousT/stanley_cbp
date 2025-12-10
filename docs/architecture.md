@@ -1,151 +1,198 @@
-# Architecture & data layout
+# Architecture & Data Layout
 
-This page describes how the Stanley package is organized and where it expects
-to find and write data on disk. The goal is to make it easy to understand
-what lives where and how the pieces talk to each other.
+This page describes how the Stanley package is organized and where it reads and writes
+data on disk. The goal is a clean, predictable architecture that works identically in:
+
+- local **Jupyter notebook runs**
+- **cluster SLURM runs**
+
+Stanley always operates inside a single *base directory*, and all user-generated output
+lives underneath it.
 
 ---
 
-## Top level layout
+## Top-Level Layout of the Repository
 
-At the top level of the repository you will see:
+At the top level you will see:
 
 - `stanley_cbp/`  
-  The Python package that implements the pipeline.
+  The Python package containing all core functionality.
 
 - `Tutorials/`  
-  Example notebooks that show how to run Stanley on real systems and on
-  simple demonstration cases.
+  Example notebooks showing full detrending, search, and analysis workflows.
 
 - `docs/`  
-  User documentation (`index.md`, `installation.md`, `architecture.md`,
-  and `tutorials.md`).
+  Documentation (`index.md`, `installation.md`, `architecture.md`, `tutorials.md`).
 
 - `pyproject.toml`  
   Build and packaging configuration.
 
 - `README.md`, `LICENSE.txt`, `Contributing.md`  
-  Front-page description, license, and contribution guidelines.
+  Front-page documentation, license, and contribution guidelines.
 
-Other files such as `bump_version.py`, `.gitignore`, `dist/`, and
-`stanley_cbp.egg-info/` are support files created during development and
-packaging.
-
----
-
-## Inside the `stanley_cbp` package
-
-The `stanley_cbp/` package is split into logical pieces. File names and exact
-boundaries may change over time, but the roles are:
-
-- **Configuration and paths**  
-  Small helpers that locate the project base directory and standard
-  subfolders (light curves, databases, search output, and so on).  
-  Notebooks and scripts call these helpers instead of hard-coding paths.
-
-- **Input / output utilities**  
-  Functions to read and write light curves, catalogs, and summary tables.
-  These routines handle:
-  - Loading mission data (for example TESS light curves)
-  - Reading and writing intermediate products
-  - Writing human-readable search summaries
-
-- **Detrending**  
-  Routines that clean the raw light curves and remove binary variability.
-  This stage produces detrended light curves that are ready for planet
-  searches.
-
-- **Planet search**  
-  The core search engine that scans detrended light curves for
-  circumbinary planet signals. This includes:
-  - Setting up the grid of trial planet parameters
-  - Running the search over all sectors
-  - Computing signal detection statistics
-
-- **Analysis and vetting**  
-  Tools that interpret candidate signals. Typical tasks include:
-  - Basic diagnostics and summary plots
-  - Period validation and BJD0 checks
-  - Eclipse modeling and secondary eclipse vetting
-  - Collecting candidates into summary tables
-
-- **Utility functions**  
-  Shared helpers such as time conversions, small math routines,
-  logging helpers, and simple plotting functions used across several
-  stages of the pipeline.
+Other support files such as `.gitignore`, `dist/`, and `stanley_cbp.egg-info/`
+are generated during development and packaging.
 
 ---
 
-## Data layout on disk
+## Inside the `stanley_cbp` Package
 
-Stanley works inside a single **base directory**. By default this is the
-folder that contains your notebook or script, but you can also set it
-manually. All input and output folders live under this base directory.
+The package is organized into functional modules:
 
-A typical layout looks like:
+### Configuration & Path Helpers
+
+Helpers that determine the runtime **base directory** and build paths to the standard
+subfolders:
+
+- `LightCurves/`
+- `PlanetSearchOutput/`
+- `UserGeneratedData/`
+- `DiagnosticReports/`
+
+All user-generated data is written *outside* the installed package.
+
+### I/O Utilities
+
+Load mission data, read/write light curves, and save intermediate products or tables.
+
+### Detrending
+
+Removes binary modulation and trends.  
+Outputs are written under:
+
+- `LightCurves/Processed/<DetrendingName>/`
+
+### Planet Search
+
+Implements the circumbinary planet search:
+
+- grid construction  
+- multi-sector search  
+- SDE map generation  
+- candidate transit lists  
+
+Outputs are written under:
+
+- `PlanetSearchOutput/<SearchName>/`
+
+### Analysis & Vetting
+
+Produces diagnostic checks, candidate validation, eclipse modeling, and summary documents.  
+Outputs may include files in:
+
+- `DiagnosticReports/`
+
+### Utilities
+
+Shared helpers: time conversions, math routines, plotting helpers, logging, etc.
+
+### Databases (Read-Only)
+
+Static mission catalogs are packaged inside the wheel, under the installed package tree.
+They are treated as read-only resources and are not modified by runs.
+
+---
+
+## Data Layout on Disk
+
+Stanley runs entirely inside a **base directory**:
+
+- In **local Jupyter runs**, `base_dir()` resolves to the folder that contains your
+  notebook.
+- In **cluster runs**, the SLURM script sets an environment variable (for example
+  `STANLEY_WORKDIR`) and `base_dir()` resolves to that directory.
+
+Under this base directory, Stanley creates a consistent data layout:
 
 - `LightCurves/`  
-  Raw and preprocessed light curve files. Often split into subfolders by
-  target or mission.
-
-- `Databases/`  
-  Cached catalogs, parameter tables, or summary information used by the
-  pipeline. These files are read by many runs but are not modified often.
+  Raw, detrended, and processed light curves.
 
 - `PlanetSearchOutput/`  
-  Outputs from planet searches. Each search usually gets its own
-  subfolder (for example by `SearchName`) that contains:
-  - Search configuration and logs  
-  - SDE maps and diagnostic files  
-  - Lists of detected transit times and candidate parameters
+  Search outputs grouped by `<SearchName>/`.
 
-- `Injections/` (optional)  
-  Input lists and results for injection–recovery tests.
+- `UserGeneratedData/`  
+  User-generated files such as:
+  - manual cut CSVs  
+  - injection parameter tables  
+  - per-target metadata  
 
-- `Figures/` or `Plots/` (optional)  
-  Generated plots, such as phase-folded light curves and SDE maps.
+- `DiagnosticReports/`  
+  Vetting plots, summary figures, and diagnostic documents.
 
-Not every project will use all of these folders, and new folders may be
-added, but the pattern is always the same: everything lives under one
-base directory, and STANLEY’s path helpers know how to find the standard
-subfolders.
+This layout is the same whether you are working locally or on a cluster.
 
 ---
 
-## How the pieces fit together
+## Local (Notebook) vs Cluster
 
-A typical run of Stanley follows these steps:
+### Local Jupyter Notebook Example
+
+If your notebook lives in some folder (for example a `Tutorials/` directory), then:
+
+- `base_dir()` resolves to that folder.
+- Stanley writes:
+
+  - `LightCurves/`
+  - `PlanetSearchOutput/`
+  - `UserGeneratedData/`
+  - `DiagnosticReports/`
+
+  directly underneath that folder.
+
+### Cluster SLURM Example
+
+On the cluster, the SLURM script chooses a run root (for example a `Runs/` directory),
+sets an environment variable pointing to it, and changes into that directory before
+calling Stanley. In that case:
+
+- `base_dir()` resolves to the run root.
+- Stanley writes:
+
+  - `LightCurves/`
+  - `PlanetSearchOutput/`
+  - `UserGeneratedData/`
+  - `DiagnosticReports/`
+
+  directly underneath that run root. You can also keep a `logs/` directory at the same
+  level for SLURM and pipeline logs.
+
+The important point is that the *structure* is identical: only the absolute location of
+the base directory changes.
+
+---
+
+## How Everything Fits Together
+
+A typical workflow looks like:
 
 1. **Set the base directory**  
-   Your notebook or script selects a base directory. All later steps read
-   and write inside this location.
+   - Local: the notebook directory.  
+   - Cluster: the directory selected by the SLURM script.
 
-2. **Load light curves and catalogs**  
-   I/O utilities read light curve files from `LightCurves/` and any
-   necessary catalog information from `Databases/`.
+2. **Load light curves / catalogs**  
+   Light curves are read from `LightCurves/` and static catalogs are read from the
+   packaged databases.
 
 3. **Detrending**  
-   The detrending routines read the raw light curves and write detrended
-   versions back to disk, usually in a subfolder named by the
-   `DetrendingName`.
+   Detrending routines read raw light curves and write outputs under  
+   `LightCurves/Processed/<DetrendingName>/`.
 
-4. **Planet search**  
-   The search engine reads the detrended light curves, runs the search,
-   and writes search products under `PlanetSearchOutput/<SearchName>/`.
+4. **Planet Search**  
+   The search engine reads the detrended light curves and writes search products under  
+   `PlanetSearchOutput/<SearchName>/`.
 
-5. **Analysis and vetting**  
-   Analysis tools read the search output, perform checks and modeling, and
-   produce:
-   - Candidate tables
-   - Diagnostic figures
-   - Text summaries
+5. **Analysis & Vetting**  
+   Analysis tools read the search outputs, perform checks and modeling, and write tables
+   and figures under `DiagnosticReports/` (and possibly additional subfolders).
 
-6. **Tutorials and scripts**  
-   The notebooks in `Tutorials/` are thin wrappers around the package.
-   They configure paths and parameters, then call the public functions
-   from `stanley_cbp/` so that the same code can be used both in tutorials and
-   in research projects.
+6. **User-Generated Data**  
+   Any user choices or metadata (manual cuts, injection definitions, etc.) are stored
+   under `UserGeneratedData/`.
 
-This structure is intended to keep code, configuration, and data clearly
-separated while still making it easy to run Stanley on new systems or on
-large samples of binaries.
+7. **Notebooks and Scripts**  
+   The notebooks in `Tutorials/` configure parameters and then call public functions
+   from `stanley_cbp`, so the same code works for tutorials, local analysis, and
+   cluster-scale searches.
+
+This architecture keeps code, configuration, and data clearly separated while preserving
+a single, predictable layout for all environments.
