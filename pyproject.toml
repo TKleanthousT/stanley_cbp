@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stanley_cbp"
-version = "0.1.60"
+version = "0.1.61"
 description = "Algorithm developed to conduct a systematic search for exoplanets orbiting eclipsing binary stars."
 readme = "README.md"
 requires-python = ">=3.9"
