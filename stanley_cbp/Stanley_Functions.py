@@ -13283,12 +13283,13 @@ def create_search_analysis_diagnostic_report(
     if base_root is not None:
         root = base_root
     else:
-        # p_outputs(search_name) returns <root>/PlanetSearchOutput/<search_name>
-        search_root = p_outputs(search_name)
-        root = search_root.parent  # the directory that contains PlanetSearchOutput
+        # p_lightcurves() returns <root>/LightCurves
+        lc_root = p_lightcurves()
+        root = lc_root.parent
+
+    diag_dir = root / "DiagnosticReports"
 
     search_dir = root / "PlanetSearchOutput" / search_name
-    diag_dir = root / "DiagnosticReports"
     diag_dir.mkdir(parents=True, exist_ok=True)
     out_pdf = diag_dir / f"{search_name}_search_analysis_diagnostic.pdf"
 
