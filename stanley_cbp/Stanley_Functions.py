@@ -13288,7 +13288,7 @@ def create_search_analysis_diagnostic_report(
         root = search_root.parent  # the directory that contains PlanetSearchOutput
 
     search_dir = root / "PlanetSearchOutput" / search_name
-    diag_dir = root / "../DiagnosticReports"
+    diag_dir = root / "DiagnosticReports"
     diag_dir.mkdir(parents=True, exist_ok=True)
     out_pdf = diag_dir / f"{search_name}_search_analysis_diagnostic.pdf"
 
