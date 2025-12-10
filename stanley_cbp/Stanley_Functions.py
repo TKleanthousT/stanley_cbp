@@ -115,15 +115,32 @@ def p_processed(det_name: str, *parts) -> Path:
     return p_lightcurves("Processed", det_name, *parts)
 
 
-def p_user_data(*parts) -> Path:
+def p_user_data(*parts, debug=False) -> Path:
     """
-    Places user-generated files (manual cuts, injection CSVs, etc.)
-    inside the workspace's UserGeneratedData directory.
+    Store user-generated files (manual cuts, injections, etc.)
+    at <workspace_root>/UserGeneratedData, where workspace_root
+    is given by _resolve_base_dir(None).
+    """
 
-    - In notebooks: <notebook-dir>/UserGeneratedData
-    - On cluster:  <RUN_ROOT>/UserGeneratedData
-    """
-    return base_dir() / "UserGeneratedData" / Path(*parts)
+    # Guaranteed-correct workspace root
+    root = Path(_resolve_base_dir(None)).resolve()
+
+    # UserGeneratedData lives directly under that root
+    user_dir = root / "UserGeneratedData"
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    # Resolve final path
+    full_path = user_dir / Path(*parts) if parts else user_dir
+
+    # Optional debug printing
+    if debug:
+        print(f"[p_user_data] workspace root: {root}")
+        print(f"[p_user_data] user_dir:      {user_dir}")
+        print(f"[p_user_data] full_path:     {full_path}")
+
+    return full_path
+
+
 
 # ---------------------------
 # Packaged databases
@@ -6612,8 +6629,6 @@ def manualCuts(
     return timeData, fluxData, fluxErr
 
 
-
-
 def apply_manual_cuts(
     timeData,
     fluxData,
@@ -6650,9 +6665,11 @@ def apply_manual_cuts(
             flux_out: Flux array after applying cuts.
             fluxErr_out: Flux uncertainties after applying cuts.
     """
+
     # --- Resolve cuts_path under the new architecture ---
     if cuts_csv is None:
         # Default: workspace/UserGeneratedData/manual_cuts_TESS.csv
+        print('we have entered apply manual cuts and the conditional that impliments p_user_data!')
         cuts_path = p_user_data("manual_cuts_TESS.csv")
     else:
         cuts_path = Path(cuts_csv)
@@ -6660,27 +6677,34 @@ def apply_manual_cuts(
             root = Path(base_dir_override) if base_dir_override is not None else base_dir()
             cuts_path = root / cuts_path
 
+    # Ensure the directory exists even if the CSV doesn't
+    _ensure_parent(cuts_path)
+
+    # If the CSV does not exist, create an empty template and return unchanged data
     if not cuts_path.exists():
-        print(f"CSV file {cuts_path} does not exist. Returning original data.")
+        print(f"CSV file {cuts_path} does not exist. Creating empty cuts file and returning original data.")
+        df_empty = pd.DataFrame(columns=["ID", "Cuts"])
+        df_empty.to_csv(cuts_path, index=False)
         return timeData, fluxData, fluxErr
 
-    df = pd.read_csv(cuts_path, dtype={'ID': str, 'Cuts': str})
-    df['ID'] = df['ID'].astype(str).str.strip()
+    # From here on, we know cuts_path exists
+    df = pd.read_csv(cuts_path, dtype={"ID": str, "Cuts": str})
+    df["ID"] = df["ID"].astype(str).str.strip()
     target_id_str = str(target_id).strip()
 
-    if target_id_str not in df['ID'].values:
+    if target_id_str not in df["ID"].values:
         print(f"No cuts found for target {target_id_str}. Returning original data.")
         return timeData, fluxData, fluxErr
 
-    cuts_raw = df.loc[df['ID'] == target_id_str, 'Cuts'].values[0]
-    if not isinstance(cuts_raw, str) or cuts_raw.strip() == '':
+    cuts_raw = df.loc[df["ID"] == target_id_str, "Cuts"].values[0]
+    if not isinstance(cuts_raw, str) or cuts_raw.strip() == "":
         print(f"No valid cuts recorded for target {target_id_str}.")
         return timeData, fluxData, fluxErr
 
     # Parse CSV cut ranges
     cut_ranges = []
-    for entry in cuts_raw.split(';'):
-        parts = entry.strip().split(',')
+    for entry in cuts_raw.split(";"):
+        parts = entry.strip().split(",")
         if len(parts) == 2:
             try:
                 cut_ranges.append([float(parts[0]), float(parts[1])])
@@ -6701,12 +6725,12 @@ def apply_manual_cuts(
         if fluxErr is not None:
             fluxErr = fluxErr[mask]
 
-    # Defensive check
     if len(timeData) == 0:
         print(f"Warning: All data removed for target {target_id_str}. Returning empty arrays.")
         return np.array([]), np.array([]), np.array([])
 
     return timeData, fluxData, fluxErr
+
 
 
 def write_or_update_csv(
@@ -12950,7 +12974,6 @@ def create_detrending_diagnostic_report(
         root = base_root
     else:
         # p_lightcurves() returns <root>/LightCurves
-        lc_root = p_lightcurves()
         root = lc_root.parent
 
     diag_dir = root / "DiagnosticReports"
