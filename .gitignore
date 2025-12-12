@@ -27,6 +27,9 @@ Databases/*
 # Editor configs
 .vscode/
 
+# Maintainer-only tools
+bump_version.py
+
 # OS-specific trash
 .DS_Store
 Thumbs.db
