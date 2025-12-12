@@ -7,11 +7,11 @@ This page explains how to install the Stanley pipeline in a clean and reliable w
 - Recommended: a conda or venv environment (a base environment.yml file is included at the top level of the repository)
 - Internet connection for installing dependencies
 
-## Installation
+# Installation
 Install from PyPI: pip install stanley_cbp
 Or install from a locally built wheel: pip install dist/stanley_cbp-0.1.X-py3-none-any.whl
 
-## Environment setup (recommended)
+# Environment setup (recommended)
 For reproducible installations, this repository provides two Conda environment files:
 
 `environment.yml` — for local machines and Jupyter-based workflows
