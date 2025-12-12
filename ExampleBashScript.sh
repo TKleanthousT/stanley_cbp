@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J stanley_test1338
+#SBATCH -J stanley_job
 #SBATCH -N 1
 #SBATCH -p batch
 #SBATCH -n 1
@@ -12,39 +12,40 @@
 
 set -euo pipefail
 
-# ===============================
 # USER CONFIGURATION
-# ===============================
+# List of target IDs (one job per SLURM array index)
+TargetList=('260128333')
 
-TargetList=('260128333') 
-
-RUN_ROOT="/cluster/tufts/martinlab/tklean01/testing/PUBLIC_RELEASE_STANLEY/Runs"
+# Choose a run root on your cluster filesystem (scratch/project/work)
+RUN_ROOT="/path/to/your/STANLEY/Runs"
 mkdir -p "${RUN_ROOT}"
 
+# Optional: keep logs alongside the run root
 LOG_DIR="${RUN_ROOT}/logs"
 mkdir -p "${LOG_DIR}"
 
+# Conda environment name that contains stanley_cbp
 CONDA_ENV="stanley_env"
 
-RUN_TAG="TestRunTOI1338"
+# Tag used to label outputs
+RUN_TAG="MyStanleyRun"
 DETRENDBASE="Detrend_${RUN_TAG}_"
 SEARCHBASE="Search_${RUN_TAG}_"
 
-# SELECT TARGET
-
+# SELECT TARGET (SLURM ARRAY)
 index=$((SLURM_ARRAY_TASK_ID - 1))
 TIC_ID="${TargetList[$index]}"
 
+# Redirect stdout/stderr to per-target log files
 exec > "${LOG_DIR}/stanley-${RUN_TAG}-out-TIC${TIC_ID}.txt" \
      2> "${LOG_DIR}/stanley-${RUN_TAG}-err-TIC${TIC_ID}.txt"
 
 echo "[INFO $(date +'%F %T')] Starting job for TIC${TIC_ID}"
 
 # ENVIRONMENT SETUP
-
-# We assume "conda" is on PATH (same as your login shell)
+# Assumes 'conda' is available in your job environment (module load / shell init)
 if ! command -v conda >/dev/null 2>&1; then
-    echo "[ERROR] 'conda' command not found in PATH. Did you load the right module or set up conda in your shell?" >&2
+    echo "[ERROR] 'conda' not found in PATH. Load your conda module or initialize conda in your shell." >&2
     exit 1
 fi
 
@@ -56,12 +57,14 @@ echo "[INFO] Using conda base: ${CONDA_BASE}"
 echo "[INFO] Python: $(which python)"
 python -V
 
-WORK_DIR="${RUN_ROOT}"
-export STANLEY_WORKDIR="${WORK_DIR}"
-cd "${WORK_DIR}"
+# STANLEY WORKDIR
+# Set the runtime workspace for cluster runs and run from there
+export STANLEY_WORKDIR="${RUN_ROOT}"
+cd "${STANLEY_WORKDIR}"
 
-echo "[INFO] Working directory (STANLEY_WORKDIR): ${WORK_DIR}"
+echo "[INFO] Working directory (STANLEY_WORKDIR): ${STANLEY_WORKDIR}"
 
+# Optional sanity check: print resolved STANLEY paths
 python - << 'EOF'
 from stanley_cbp import Stanley_Functions as AC
 print("base_dir():", AC.base_dir())
@@ -71,7 +74,6 @@ print("PlanetSearchOutput root:", AC.p_outputs("TEST_SEARCH"))
 EOF
 
 # RUN STANLEY PIPELINE
-
 SYSTEM_ARG="TIC${TIC_ID}"
 DETREND_NAME="${DETRENDBASE}${TIC_ID}"
 SEARCH_NAME="${SEARCHBASE}${TIC_ID}"
@@ -87,11 +89,11 @@ python -m stanley_cbp.Stanley_Detrending \
     --detrendingName="${DETREND_NAME}" \
     --useSavedData=0
 
-echo "[INFO $(date +'%F %T')] Running short bounded planet search..."
+echo "[INFO $(date +'%F %T')] Running planet search..."
 python -m stanley_cbp.Stanley_PlanetSearch_InterpN_DebugPadding \
     --systemName="${SYSTEM_ARG}" \
     --searchName="${SEARCH_NAME}" \
-    --detrendingName="${DETRENDBASE}${TIC_ID}" \
+    --detrendingName="${DETREND_NAME}" \
     --totalSectors=4 \
     --parallel=1 \
     --onCluster=1 \
