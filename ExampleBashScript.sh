@@ -18,7 +18,7 @@ set -euo pipefail
 
 TargetList=('260128333')  # TIC 260128333
 
-RUN_ROOT="/cluster/tufts/martinlab/tklean01/PUBLIC_RELEASE_STANLEY/Runs"
+RUN_ROOT="/cluster/tufts/martinlab/tklean01/testing/PUBLIC_RELEASE_STANLEY/Runs"
 mkdir -p "${RUN_ROOT}"
 
 LOG_DIR="${RUN_ROOT}/logs"
