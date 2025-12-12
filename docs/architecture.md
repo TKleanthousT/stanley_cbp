@@ -25,7 +25,7 @@ At the top level you will see:
 - `pyproject.toml`  
   Build and packaging configuration.
 
-- `README.md`, `LICENSE.txt`, `Contributing.md`  
+- `README.md`, `LICENSE.txt`
   Front-page documentation, license, and contribution guidelines.
 
 Other support files such as `.gitignore`, `dist/`, and `stanley_cbp.egg-info/` are generated during development and packaging.
@@ -52,7 +52,7 @@ Load mission data, read/write light curves, and save intermediate products or ta
 
 ### Detrending
 
-Removes binary modulation and trends. Outputs are written under:
+Removes flux modulation from astrophysical trends. Outputs are written under:
 
 - `LightCurves/Processed/<DetrendingName>/`
 
@@ -102,7 +102,6 @@ Under this base directory, Stanley creates a consistent data layout:
   User-generated files such as:
   - manual cut CSVs  
   - injection parameter tables  
-  - per-target metadata  
 
 This layout is the same whether you are working locally or on a cluster.
 
@@ -125,18 +124,20 @@ If your notebook lives in some folder (for example a `Tutorials/` directory), th
 
 ### Cluster SLURM Example
 
-On the cluster, the SLURM script chooses a run root (for example a `Runs/` directory), sets an environment variable pointing to it, and changes into that directory before calling Stanley. In that case:
+On the cluster, the run root is defined by the SLURM submission script. The script selects a run directory (for example a `Runs/` folder), sets an environment variable pointing to it (e.g. `RUN_ROOT`), and then changes into that directory before calling STANLEY. An example SLURM submission script (`ExampleBashScript.sh`) is provided in the repository for reference.
+
+In this case:
 
 - `base_dir()` resolves to the run root.
-- Stanley writes:
+- STANLEY writes:
 
   - `LightCurves/`
   - `PlanetSearchOutput/`
   - `UserGeneratedData/`
 
-  directly underneath that run root. You can also keep a `logs/` directory at the same level for SLURM and pipeline logs.
+  directly underneath that run root. A `logs/` directory can also be kept at the same level for SLURM and pipeline logs.
 
-The important point is that the *structure* is identical: only the absolute location of the base directory changes.
+The important point is that the *directory structure* is identical in all cases — only the absolute location of the base directory changes.
 
 ---
 
