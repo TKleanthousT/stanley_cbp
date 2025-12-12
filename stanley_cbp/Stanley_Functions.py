@@ -2089,6 +2089,969 @@ def _try_harmonics_fixed(bls, P_best_days, q_at_best):
 			best = (p, float(P))
 	return best[1]
 
+# Coarse-to-fine search presets for BLS; control decimation, phase tolerance, and evaluation caps
+COARSE = dict(decimate=12, phi_tol=0.35, max_evals=40_000, refine=False)
+MEDIUM  = dict(decimate=6,  phi_tol=0.25, max_evals=60_000, refine=False)
+SANE  = dict(decimate=1,  phi_tol=0.1, max_evals=160_000, refine=True)
+FINE = dict(decimate=1,  phi_tol=0.01, max_evals=200_000, refine=True)
+FINER = dict(decimate=1,  phi_tol=0.001, max_evals=260_000, refine=True)
+FINEST = dict(decimate=1,  phi_tol=0.0001, max_evals=320_000, refine=True)
+ULTRAFINE = dict(decimate=1, phi_tol=5e-5,  max_evals=500_000, refine=True)
+HYPERFINE = dict(decimate=1, phi_tol=1e-5,  max_evals=800_000, refine=True)
+
+
+def bls_ultrafast2( 
+    time_s, 
+    flux, 
+    flux_err=None, 
+    DetrendingName=None, 
+    ID=None,                        # for file naming 
+    min_period_days=0.05, 
+    max_period_days=90.0, 
+    q_eff=None,                 # single duty cycle; None => auto from cadence 
+    decimate=6,                 # stride factor for *coarse* pass only (>=1) 
+    phi_tol=0.25,               # phase tolerance -> controls df 
+    max_evals=60_000,           # hard cap on coarse grid evaluations 
+    refine=True,                # tiny 1D local refine around the top peak 
+    # optional pre-detrending (BIC-gated) — used *before* search if hint provided 
+    pre_detrend='none',         # 'none' | 'ellipsoidal' | 'reflection' | 'both' 
+    Pbin_seconds_hint=None,     # needed for pre_detrend to be meaningful 
+    bjd0_hint=0.0, 
+    bic_delta=0.0, 
+    # harmonic check 
+    check_harmonics=False,      # compare P to 0.5P and 2P by BLS power 
+    plot_harmonics=True,        # save folded plots for P, P/2, 2P (data only) 
+    # plot controls 
+    annotate_metric='bic',      # kept for API compat; unused in simple plots 
+    plot_points_alpha=0.5 
+): 
+    '''
+    Functionality:
+        Perform a very fast BLS period search on a light curve with validation-safe scalar
+        durations, optional pre-detrending using a binary hint period, optional harmonic
+        checks (P/2, 2P), and optional local refinement around the best period. Returns
+        quantities in seconds where applicable.
+
+    Arguments:
+        time_s (array-like): Time values in seconds.
+        flux (array-like): Flux values (will be normalized internally).
+        flux_err (array-like or None): Flux uncertainties (optional).
+        DetrendingName (str or None): Name used for saving diagnostic plots.
+        ID (str or int or None): Target identifier for file naming.
+        min_period_days (float): Minimum period to search (days).
+        max_period_days (float): Maximum period to search (days).
+        q_eff (float or None): Effective duty cycle (duration/period); None auto-derives from cadence.
+        decimate (int): Stride for coarse pass; >=1 (1 means no decimation).
+        phi_tol (float): Phase tolerance factor controlling frequency grid spacing.
+        max_evals (int): Hard cap on coarse grid evaluations.
+        refine (bool): If True, do a fine 1D search around the coarse peak.
+        pre_detrend (str): 'none'|'ellipsoidal'|'reflection'|'both' for optional pre-detrending.
+        Pbin_seconds_hint (float or None): Binary period hint in seconds for pre-detrend models.
+        bjd0_hint (float): Reference epoch hint for pre-detrending (seconds).
+        bic_delta (float): BIC improvement threshold to accept detrending model removal.
+        check_harmonics (bool): If True, compare power at P/2 and 2P to the best P.
+        plot_harmonics (bool): If True, save simple phase-folded plots for P, P/2, 2P (data only).
+        annotate_metric (str): Kept for compatibility; not used here.
+        plot_points_alpha (float): Alpha for scatter plot points in folded plots.
+
+    Returns:
+        tuple:
+            period_s (float): Best period in seconds.
+            t0_s (float): Best epoch (transit time) in seconds (same zero-point as input time).
+            depth (float): Estimated transit/eclipse depth (normalized units).
+            duration_s (float): Estimated duration in seconds.
+    '''
+
+    # Helpers (validation-safe wrappers)
+    def _safe_scalar_duration_for_periods(P_arr, q_guess, D_floor):
+        '''
+        Functionality:
+            Compute a single safe scalar duration for an array of trial periods such that
+            0 < D < 0.49 * min(P), guarding against pathological inputs.
+        Arguments:
+            P_arr (array-like): Period grid (days).
+            q_guess (float): Duty cycle guess (dimensionless).
+            D_floor (float): Minimum duration floor (days).
+        Returns:
+            float: A scalar duration (days) compatible with all periods in P_arr.
+        '''
+        P_arr = np.asarray(P_arr, dtype=float)
+        P_arr = P_arr[np.isfinite(P_arr) & (P_arr > 0)]
+        if P_arr.size == 0:
+            raise ValueError("No valid periods in grid.")
+        Pmin = float(np.min(P_arr))
+        D = float(max(q_guess * Pmin, D_floor))
+        if not np.isfinite(D) or D <= 0:
+            D = float(max(D_floor, 1e-6))
+        if D >= 0.49 * Pmin:
+            D = 0.45 * Pmin
+        return D
+
+    def _safe_power_array(bls, P_arr, D_scalar):
+        '''
+        Functionality:
+            Evaluate BLS power safely for an array of periods with a scalar duration,
+            dropping/guarding invalid values.
+        Arguments:
+            bls (BoxLeastSquares): Prepared BLS object.
+            P_arr (array-like): Periods (days).
+            D_scalar (float): Duration (days).
+        Returns:
+            BoxLeastSquaresResults: Result from bls.power(P_arr_valid, D_scalar_sanitized).
+        '''
+        P_arr = np.asarray(P_arr, dtype=float)
+        mask = np.isfinite(P_arr) & (P_arr > 0)
+        P_arr = P_arr[mask]
+        if P_arr.size == 0:
+            raise ValueError("Empty/invalid period array for BLS.")
+        D = float(D_scalar)
+        Pmin = float(np.min(P_arr))
+        if not np.isfinite(D) or D <= 0:
+            D = 0.45 * Pmin
+        elif D >= 0.49 * Pmin:
+            D = 0.45 * Pmin
+        return bls.power(P_arr, D)
+
+    def _safe_power_scalar(bls, P_single, D_scalar):
+        '''
+        Functionality:
+            Evaluate BLS power for a single period with a scalar duration, with bounds checks.
+        Arguments:
+            bls (BoxLeastSquares): Prepared BLS object.
+            P_single (float): Trial period (days).
+            D_scalar (float): Trial duration (days).
+        Returns:
+            BoxLeastSquaresResults: Single-period BLS evaluation.
+        '''
+        P = float(P_single)
+        if not np.isfinite(P) or P <= 0:
+            raise ValueError("Invalid scalar period for BLS.")
+        D = float(D_scalar)
+        if not np.isfinite(D) or D <= 0 or D >= 0.49 * P:
+            D = 0.45 * P
+        return bls.power(np.atleast_1d(P), D)
+
+    # Preprocess
+    t = np.asarray(time_s, dtype=float)  # time in seconds
+    y = np.asarray(flux, dtype=float)    # flux values
+    dy = None if flux_err is None else np.asarray(flux_err, dtype=float)
+
+    # keep only finite rows across all provided arrays
+    m = np.isfinite(t) & np.isfinite(y) & (np.ones_like(y, bool) if dy is None else np.isfinite(dy))
+    t, y = t[m], y[m]; dy = (None if dy is None else dy[m])
+    if t.size < 20:
+        raise RuntimeError("Not enough points after filtering.")
+
+    # standardize flux: subtract median, scale by robust std; avoids numerical issues
+    y_med = np.nanmedian(y)
+    y_std = np.nanstd(y - y_med)
+    if not np.isfinite(y_std) or y_std <= 0:
+        y_std = 1.0
+    yN = (y - y_med) / y_std
+    dyN = None if dy is None else (dy / y_std)
+
+    # convert time to days for astropy BLS
+    t_days_full = t / 86400.0
+
+    # cadence (days) and data baseline (days)
+    cad_days = np.nanmedian(np.diff(np.sort(t_days_full)))
+    if not np.isfinite(cad_days) or cad_days <= 0:
+        cad_days = 120.0 / 86400.0  # default 2-min cadence
+    T_days = float(np.nanmax(t_days_full) - np.nanmin(t_days_full))
+    if not np.isfinite(T_days) or T_days <= 0:
+        raise ValueError("Invalid time baseline.")
+
+    # Optional pre-detrending (BIC-gated)
+    if pre_detrend != 'none' and Pbin_seconds_hint is not None:
+        try:
+            # Optional ellipsoidal variation removal
+            if pre_detrend in ('ellipsoidal', 'both'):
+                try:
+                    d_flux, _, par = detrend_ellipsoidal(
+                        time_s, yN, Pbin_seconds_hint,
+                        bjd0=bjd0_hint,
+                        bic_delta=bic_delta,
+                        plot=True,
+                        save_prefix=None,
+                        detrending_name=DetrendingName,
+                        return_model=True
+                    )
+                    if isinstance(par, dict) and par.get('removed', False):
+                        yN = d_flux
+                except NameError:
+                    # detrend_ellipsoidal not defined in this context
+                    pass
+                except Exception:
+                    # be robust to any modeling failure
+                    pass
+            # Optional reflection/emission removal
+            if pre_detrend in ('reflection', 'both'):
+                try:
+                    d_flux, _, par = detrend_reflection(
+                        time_s, yN, Pbin_seconds_hint,
+                        bjd0=bjd0_hint,
+                        bic_delta=bic_delta,
+                        plot=True,
+                        save_prefix=None,
+                        detrending_name=DetrendingName,
+                        return_model=True
+                    )
+                    if isinstance(par, dict) and par.get('removed', False):
+                        yN = d_flux
+                except NameError:
+                    pass
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    # Coarse decimation
+    if int(decimate) < 1:
+        decimate = 1
+    if decimate > 1:
+        # stride-select a subset for very fast coarse scan
+        sel = np.arange(0, t_days_full.size, int(decimate))
+        t_days = t_days_full[sel]
+        y_use = yN[sel]
+        dy_use = None if dyN is None else dyN[sel]
+    else:
+        # use full set
+        t_days, y_use, dy_use = t_days_full, yN, dyN
+
+    # Frequency grid
+    fmin = 1.0 / float(max_period_days)  # lowest frequency
+    fmax = 1.0 / float(min_period_days)  # highest frequency
+    if not (fmax > fmin):
+        raise ValueError("min_period_days must be < max_period_days")
+
+    # choose effective duty cycle if not provided
+    if q_eff is None:
+        q_eff = max(2.0 * cad_days / min_period_days, 0.004)  # >= two cadences; >=0.4%
+        q_eff = min(q_eff, 0.12)  # cap to reasonable upper bound for duty cycle
+    q_eff = float(q_eff)
+
+    # phase-tolerance-driven frequency resolution
+    df_by_phase = max((phi_tol * q_eff) / T_days, 1e-12)
+    n_phase = int(np.ceil((fmax - fmin) / df_by_phase))
+    n_eval = int(np.clip(n_phase, 256, max_evals))  # cap to avoid overwork
+    f_grid = np.linspace(fmin, fmax, n_eval, endpoint=True)
+    P_grid = 1.0 / f_grid  # trial periods (days)
+
+    # construct a safe scalar duration for the whole grid
+    D_floor = max(2.0 * cad_days, 1e-6)
+    D_scalar = _safe_scalar_duration_for_periods(P_grid, q_eff, D_floor)
+
+    # BLS coarse
+    bls = BoxLeastSquares(t_days, y_use, dy_use)
+    res = _safe_power_array(bls, P_grid, D_scalar)
+
+    # select coarse best
+    i_best = int(np.nanargmax(res.power))
+    P_best = float(res.period[i_best])            # days
+    t0_best = float(res.transit_time[i_best])     # days
+    depth_best = float(res.depth[i_best])         # normalized
+    dur_best = float(res.duration[i_best])        # days
+
+    # Refine
+    best_power = float(res.power[i_best])
+    bls_full = BoxLeastSquares(t_days_full, yN, dyN)  # full-resolution BLS
+
+    if refine:
+        # local frequency window around coarse best
+        f0 = 1.0 / P_best
+        step = (f_grid[1] - f_grid[0]) if f_grid.size > 1 else df_by_phase
+        f1 = max(f0 - 10 * step, fmin)
+        f2 = min(f0 + 10 * step, fmax)
+        if f2 <= f1:
+            f2 = min(fmax, f1 + 5 * df_by_phase)
+        n_ref = max(256, min(4096, 12 * (int((f2 - f1) / step) + 1)))
+        f_ref = np.linspace(f1, f2, n_ref)
+        P_ref = 1.0 / f_ref
+
+        # recompute safe scalar duration for refined window
+        D_ref_scalar = _safe_scalar_duration_for_periods(P_ref, q_eff, D_floor)
+
+        # fine power sweep
+        r2 = _safe_power_array(bls_full, P_ref, D_ref_scalar)
+        j = int(np.nanargmax(r2.power))
+
+        # small parabolic refine in frequency if interior point
+        if 0 < j < (r2.period.size - 1):
+            fx = 1.0 / r2.period[j-1:j+2]
+            py = r2.power[j-1:j+2]
+            denom = (fx[0] - 2*fx[1] + fx[2])
+            if denom != 0 and np.all(np.isfinite([*fx, *py])):
+                f_peak = float(fx[1] + 0.5 * ((py[0] - py[2]) / denom))
+                f_lo, f_hi = float(min(fx[0], fx[2])), float(max(fx[0], fx[2]))
+                f_peak = float(np.clip(f_peak, f_lo, f_hi))
+                if np.isfinite(f_peak) and f_peak > 0:
+                    P_peak = 1.0 / f_peak
+                    try:
+                        r3 = _safe_power_scalar(bls_full, P_peak, D_ref_scalar)
+                        if float(r3.power[0]) > float(r2.power[j]):
+                            r2, j = r3, 0
+                    except Exception:
+                        # if single-eval fails, keep r2
+                        pass
+
+        # adopt refined best
+        P_best = float(r2.period[j])          # days
+        t0_best = float(r2.transit_time[j])   # days
+        depth_best = float(r2.depth[j])
+        dur_best = float(r2.duration[j])      # days
+        best_power = float(r2.power[j])
+
+    # Plotting helper (simplified for harmonic check)
+    def _plot_fold_with_models(period_s, label, suffix):
+        '''
+        Functionality:
+            Save a simple phase-folded plot (data only) at a given trial period.
+        Arguments:
+            period_s (float): Period in seconds for plotting.
+            label (str): Text label to include in the plot title (e.g., "P", "0.5P").
+            suffix (str): Suffix for the filename.
+        Returns:
+            None
+        '''
+        period_d = period_s / 86400.0
+        phase = ((t - t0_best * 86400.0) / period_s) % 1.0  # align to t0_best (seconds)
+        order = np.argsort(phase)
+        ph, yy = phase[order], yN[order]
+
+        fig, ax = plt.subplots(figsize=(6.4, 4.0))
+        ax.plot(ph, yy, '.', ms=2, alpha=plot_points_alpha)
+        ax.set_xlabel("Phase")
+        ax.set_ylabel("Normalized Flux")
+        ax.set_title(f"Fold at {label}: {period_d:.6f} d")
+        ax.axhline(0, ls=':', lw=1, alpha=0.5)
+        ax.grid(True, ls=':', alpha=0.4)
+
+        if DetrendingName is not None:
+            base = _resolve_base_dir(None)
+            my_folder = base / 'LightCurves' / 'Data_Preparation' / DetrendingName
+            my_folder.mkdir(parents=True, exist_ok=True)
+            target = ID or "target"
+            fname = my_folder / f"{target}_harmonics_{suffix}.png"
+            plt.savefig(fname, dpi=200, bbox_inches='tight')
+        plt.close(fig)
+
+    # Optional harmonic check (P, P/2, 2P)
+    if check_harmonics and np.isfinite(P_best) and P_best > 0:
+        # Plot baseline P (data-only) if requested
+        if plot_harmonics:
+            _plot_fold_with_models(P_best * 86400.0, "P", "P")
+
+        # Freeze baseline to avoid mutation during loop
+        P0_days = float(P_best)
+        t0_0_days = float(t0_best)
+        best_power_ini = float(best_power)
+
+        # Initialize candidate with baseline
+        cand_power = best_power_ini
+        cand_P = P0_days
+        cand_t0 = t0_0_days
+        cand_depth = float(depth_best)
+        cand_dur = float(dur_best)
+
+        for mult in (0.5, 2.0):
+            Ph = P0_days * mult  # test P/2 and 2P
+            if not (min_period_days <= Ph <= max_period_days):
+                continue
+            try:
+                D_h = _safe_scalar_duration_for_periods([Ph], q_eff, D_floor)
+                rh = _safe_power_scalar(bls_full, Ph, D_h)
+
+                if plot_harmonics:
+                    suffix = f"{str(mult).replace('.','p')}P"
+                    _plot_fold_with_models(Ph * 86400.0, f"{mult}P", suffix)
+
+                pwr = float(rh.power[0])
+                if pwr > cand_power:
+                    # adopt improved harmonic
+                    cand_power = pwr
+                    cand_P = float(rh.period[0])
+                    cand_t0 = float(rh.transit_time[0])
+                    cand_depth = float(rh.depth[0])
+                    cand_dur = float(rh.duration[0])
+            except Exception:
+                # ignore failures to keep robustness
+                pass
+
+        # Adopt the best candidate AFTER checking both harmonics
+        best_power = cand_power
+        P_best = cand_P
+        t0_best = cand_t0
+        depth_best = cand_depth
+        dur_best = cand_dur
+
+    # Return in seconds
+    return (
+        P_best * 86400.0,        # period_s
+        t0_best * 86400.0,       # t0_s
+        depth_best,              # depth (normalized)
+        dur_best * 86400.0       # duration_s
+    )
+
+
+def _detect_single_dip_phase(
+    phase, flux,
+    expected_depth=None,            # from BLS (normalized units)
+    expected_width_phase=None,      # duration_s / period_s
+    n_bins=800,
+    min_prom_frac=0.35,             # fraction of expected_depth for prominence
+    sigma_mult=3.0,                 # robust noise sigma multiplier for fallback
+    distance_mult=1.25              # min peak separation ~ width_bins * distance_mult
+):
+    '''
+    Functionality:
+        Detect whether a phase-folded light curve exhibits a single significant dip (eclipse/transit)
+        by binning the phase, smoothing, inverting to convert dips to peaks, and applying a robust
+        peak-finding routine with thresholds derived from expected depth/width or from robust noise.
+
+    Arguments:
+        phase (array-like): Phase values (will be wrapped to [0,1)).
+        flux (array-like): Normalized flux values corresponding to phase.
+        expected_depth (float or None): Expected dip depth (normalized units) to set prominence.
+        expected_width_phase (float or None): Expected dip width as fraction of phase (duration/period).
+        n_bins (int): Number of phase bins for median-binning.
+        min_prom_frac (float): Fraction of expected_depth used as a prominence floor.
+        sigma_mult (float): Multiplier on robust sigma for fallback prominence threshold.
+        distance_mult (float): Minimum peak separation as a multiple of the expected width in bins.
+
+    Returns:
+        tuple:
+            is_single (bool): True if exactly one significant dip is detected.
+            n_dips (int): Number of detected dips.
+            info (dict): Diagnostic info including bin centers, binned flux, inverted series,
+                         thresholds, indices and properties of detected peaks.
+    '''
+    # wrap phases to [0,1)
+    phase = np.asarray(phase, float) % 1.0
+    flux  = np.asarray(flux,  float)
+
+    # bin phases into n_bins using median in each bin
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    idx   = np.clip(np.digitize(phase, edges) - 1, 0, n_bins - 1)
+    bflux = np.full(n_bins, np.nan)
+    for k in range(n_bins):
+        m = (idx == k)
+        if np.any(m):
+            bflux[k] = np.nanmedian(flux[m])
+
+    # fill any NaNs with global median, then apply a simple wrap-around smoothing
+    bflux = np.where(np.isfinite(bflux), bflux, np.nanmedian(bflux))
+    bflux = 0.25*np.roll(bflux, -1) + 0.5*bflux + 0.25*np.roll(bflux, 1)
+
+    # invert so dips become peaks after subtraction from baseline
+    baseline = np.nanmedian(bflux)
+    y = baseline - bflux  # inverted signal
+
+    # robust noise estimate using MAD
+    mad = np.nanmedian(np.abs(bflux - baseline))
+    robust_sigma = 1.4826 * (mad if np.isfinite(mad) and mad > 0 else np.nanstd(bflux - baseline))
+
+    # expected width in phase (if unavailable, use small default)
+    if expected_width_phase is None or not np.isfinite(expected_width_phase):
+        expected_width_phase = max(1.5 / n_bins, 0.002)  # tiny but > 0
+    width_bins = int(max(2, expected_width_phase * n_bins))
+    distance = int(max(width_bins * distance_mult, 3))  # min separation between peaks
+
+    # prominence threshold combining expected depth and robust noise
+    if expected_depth is None or not np.isfinite(expected_depth):
+        prom = sigma_mult * (robust_sigma if np.isfinite(robust_sigma) else np.nanstd(y))
+    else:
+        prom = max(
+            min_prom_frac * float(expected_depth),
+            sigma_mult * (robust_sigma if np.isfinite(robust_sigma) else 0.0),
+            1e-6
+        )
+
+    # try scipy's find_peaks; fall back to a simple contiguous-threshold detector
+    peaks_idx = []
+    try:
+        from scipy.signal import find_peaks
+        peaks_idx, props = find_peaks(
+            y,
+            prominence=prom,
+            distance=distance,
+            width=max(1, int(0.6 * width_bins))  # loose lower bound on width
+        )
+        prominences = props.get("prominences", np.array([]))
+        widths = props.get("widths", np.array([]))
+    except Exception:
+        # fallback approach: contiguous runs above threshold
+        thr = prom
+        above = y > thr
+        prominences = []
+        widths = []
+        k = 0
+        while k < n_bins:
+            if above[k]:
+                start = k
+                while k < n_bins and above[k]:
+                    k += 1
+                end = k
+                center = (start + end - 1) // 2
+                # enforce minimum distance from previous accepted center
+                if len(peaks_idx) == 0 or (center - peaks_idx[-1]) >= distance:
+                    peaks_idx.append(center)
+                    prominences.append(np.nanmax(y[start:end]) if end > start else y[center])
+                    widths.append(end - start)
+            else:
+                k += 1
+        peaks_idx = np.array(peaks_idx, dtype=int)
+        prominences = np.array(prominences, float)
+        widths = np.array(widths, float)
+
+    # number of detected dips
+    n_dips = int(len(peaks_idx))
+
+    # package diagnostics for downstream inspection/plots
+    info = dict(
+        n_bins=n_bins,
+        width_bins=width_bins,
+        distance=distance,
+        prom_threshold=prom,
+        robust_sigma=robust_sigma,
+        peaks_idx=peaks_idx,
+        prominences=prominences,
+        widths=widths,
+        binned_phase=np.linspace(0.5/n_bins, 1-0.5/n_bins, n_bins),
+        binned_flux=bflux,
+        inverted=y
+    )
+    return (n_dips == 1), n_dips, info
+
+
+def iterative_bls_single_dip_search(
+    time_s,
+    flux,
+    flux_err=None,
+    DetrendingName=None,
+    ID=None,
+    min_period_days=0.05,
+    max_period_days=90.0,
+    presets_sequence=None,
+    q_eff=None,
+    pre_detrend='none',            # kept for API; NOT used during search
+    Pbin_seconds_hint=None,        # kept for API
+    bjd0_hint=0.0,
+    bic_delta=0.0,
+    check_harmonics=False,         # search logic not affected by detrending
+    plot_harmonics=False,
+    # dip-detection knobs
+    detect_bins=800,
+    min_prom_frac=0.35,
+    sigma_mult=3.0,
+    distance_mult=1.25,
+    # POST-ONLY cleanup/detrending at {P/2, P, 2P}
+    post_cleanup='both'            # 'none' | 'ellipsoidal' | 'reflection' | 'both'
+):
+    '''
+    Functionality:
+        Iteratively runs a coarse→fine BLS search using preset grids until a single
+        significant dip is detected in the folded light curve. Optionally performs
+        one-time post-clean detrending at {P/2, P, 2P} (ellipsoidal/reflection) and
+        can generate comparison plots. Harmonics are checked by power only; detrending
+        is applied after the final period choice.
+
+    Arguments:
+        time_s (array-like): Observation times in seconds.
+        flux (array-like): Flux values (any normalization; internally standardized).
+        flux_err (array-like or None): Flux uncertainties; optional.
+        DetrendingName (str or None): Name used for output directories/files.
+        ID (str|int|None): Target identifier for filenames.
+        min_period_days (float): Minimum period to search (days).
+        max_period_days (float): Maximum period to search (days).
+        presets_sequence (list[dict] or None): Sequence of preset dicts (e.g., COARSE...FINEST).
+        q_eff (float or None): Duty cycle guess; if None, auto-derived from cadence.
+        pre_detrend (str): API placeholder (not used in search loop): 'none'|'ellipsoidal'|'reflection'|'both'.
+        Pbin_seconds_hint (float or None): API placeholder for detrenders.
+        bjd0_hint (float): Epoch hint (seconds) for detrenders.
+        bic_delta (float): BIC threshold to accept detrending model removal.
+        check_harmonics (bool): If True, BLS compares P vs P/2 vs 2P by power.
+        plot_harmonics (bool): If True, saves folded data-only plots during search and post-clean models.
+        detect_bins (int): Number of phase bins for dip detection.
+        min_prom_frac (float): Minimum prominence as fraction of expected depth.
+        sigma_mult (float): Robust sigma multiplier for fallback prominence threshold.
+        distance_mult (float): Peak separation factor in bins (relative to width).
+        post_cleanup (str): Post period-choice detrending: 'none'|'ellipsoidal'|'reflection'|'both'.
+
+    Returns:
+        tuple:
+            period_s (float): Final period in seconds.
+            t0_s (float): Estimated transit epoch in seconds (same zero-point as input times).
+            depth (float): Estimated depth (normalized units).
+            duration_s (float): Estimated duration in seconds.
+            meta (dict): Metadata including preset used, detection info, and post-clean details if run.
+    '''
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from pathlib import Path
+
+    # Default preset ladder if none provided
+    if presets_sequence is None:
+        presets_sequence = [COARSE, MEDIUM, SANE, FINE, FINER, FINEST]
+
+    # --- BASE-DIR OUTPUT ROOT (no signature change) ---
+    _root = _resolve_base_dir(None)
+    _out_root = _root / "LightCurves" / "Data_Preparation"
+    if DetrendingName is not None:
+        _out_dir = _out_root / str(DetrendingName)
+    else:
+        _out_dir = None
+    if _out_dir is not None:
+        _out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Helpers (post-only)
+    def _apply_harmonic_detrend(time_s, yN, period_s, which, bic_delta, name, bjd0_hint):
+        '''
+        Functionality:
+            Apply optional post-clean harmonic detrending (ellipsoidal/reflection/both)
+            at a specified period, returning the cleaned flux and diagnostic info.
+
+        Arguments:
+            time_s (array-like): Times in seconds.
+            yN (array-like): Normalized flux (zero-mean-ish) to detrend.
+            period_s (float): Trial period (seconds) for harmonic model(s).
+            which (str): 'none'|'ellipsoidal'|'reflection'|'both' detrend choice.
+            bic_delta (float): BIC improvement threshold to accept detrending.
+            name (str or None): Output folder suffix.
+            bjd0_hint (float): Epoch (seconds) for detrenders.
+
+        Returns:
+            tuple:
+                y_out (np.ndarray): Possibly detrended flux.
+                info (dict): Details from detrending steps (params/errors).
+        '''
+        # Build output directory (base-dir aware)
+        out_dir = (_out_root / str(name)) if name is not None else None
+        if out_dir is not None:
+            out_dir.mkdir(parents=True, exist_ok=True)
+        base = ID or "target"  # filename stem
+
+        y_out = yN
+        info = {}
+
+        # Optionally remove ellipsoidal variations
+        if which in ('ellipsoidal', 'both'):
+            try:
+                save_prefix = None if out_dir is None else str(out_dir / f"{base}_ellip")
+                d_flux, _, par = detrend_ellipsoidal(
+                    time_s, y_out, period_s,
+                    bjd0=bjd0_hint,
+                    bic_delta=bic_delta,
+                    plot=True,
+                    save_prefix=save_prefix,          # where plots will be saved
+                    detrending_name=name,
+                    return_model=True
+                )
+                info['ellip'] = par
+                if isinstance(par, dict) and par.get('removed', False):
+                    y_out = d_flux
+            except Exception as e:
+                info['ellip_error'] = str(e)
+
+        # Optionally remove reflection/emission
+        if which in ('reflection', 'both'):
+            try:
+                save_prefix = None if out_dir is None else str(out_dir / f"{base}_refl")
+                d_flux, _, par = detrend_reflection(
+                    time_s, y_out, period_s,
+                    bjd0=bjd0_hint,
+                    bic_delta=bic_delta,
+                    plot=True,
+                    save_prefix=save_prefix,
+                    detrending_name=name,
+                    return_model=True
+                )
+                info['refl'] = par
+                if isinstance(par, dict) and par.get('removed', False):
+                    y_out = d_flux
+            except Exception as e:
+                info['refl_error'] = str(e)
+
+        return y_out, info
+
+    def _sine_flat_fit_stats(phase, y, dy=None):
+        '''
+        Functionality:
+            Fit (i) flat model y=c and (ii) sinusoid y=c+a*sin(2πφ)+b*cos(2πφ),
+            returning χ²_red and a BIC-like score for each, plus smooth curves.
+
+        Arguments:
+            phase (array-like): Phases in [0,1).
+            y (array-like): Flux values aligned with phase.
+            dy (array-like or None): Optional uncertainties.
+
+        Returns:
+            dict or None:
+                flat: dict(chi2_red, bic)
+                sine: dict(chi2_red, bic)
+                ph_fine (np.ndarray), flat_curve (np.ndarray), sine_curve (np.ndarray)
+        '''
+        phase = np.asarray(phase, float); y = np.asarray(y, float)
+        n = y.size
+        if n < 5:
+            return None
+        if dy is None:
+            w = np.ones_like(y)
+        else:
+            dy = np.asarray(dy, float)
+            w = 1.0 / np.clip(dy, 1e-12, np.inf)**2
+
+        X_flat = np.column_stack([np.ones(n)])
+        X_sin  = np.column_stack([np.ones(n),
+                                  np.sin(2*np.pi*phase),
+                                  np.cos(2*np.pi*phase)])
+        W = np.diag(w)
+
+        def _fit(X):
+            XT_W = X.T @ W
+            beta = np.linalg.pinv(XT_W @ X) @ (XT_W @ y)
+            yhat = X @ beta
+            resid = y - yhat
+            chi2 = float(np.sum((resid**2) * w))
+            k = X.shape[1]
+            dof = max(n - k, 1)
+            chi2_red = chi2 / dof
+            bic = chi2 + k * np.log(max(n,1))
+            return beta, yhat, chi2_red, bic
+
+        beta_f, _, chi2r_f, bic_f = _fit(X_flat)
+        beta_s, _, chi2r_s, bic_s = _fit(X_sin)
+
+        ph_fine = np.linspace(0, 1, 1000, endpoint=False)
+        sine_curve = (beta_s[0]
+                      + beta_s[1]*np.sin(2*np.pi*ph_fine)
+                      + beta_s[2]*np.cos(2*np.pi*ph_fine))
+        flat_curve = np.full_like(ph_fine, beta_f[0])
+        return dict(
+            flat=dict(chi2_red=chi2r_f, bic=bic_f),
+            sine=dict(chi2_red=chi2r_s, bic=bic_s),
+            ph_fine=ph_fine,
+            flat_curve=flat_curve,
+            sine_curve=sine_curve
+        )
+
+    def _post_plot_with_models(time_s, y_det, t0_s, period_s, tag, period_days,
+                               out_dir, target, annotate_metric='bic', alpha_pts=0.5):
+        '''
+        Functionality:
+            Fold cleaned data at period_s and plot points with flat/sine overlays;
+            annotate and bold the preferred model by BIC (default) or χ²_red.
+        '''
+        phase = ((np.asarray(time_s, float) - t0_s) / period_s) % 1.0
+        order = np.argsort(phase)
+        ph, yy = phase[order], y_det[order]
+
+        stats = _sine_flat_fit_stats(ph, yy, dy=None)
+
+        fig, ax = plt.subplots(figsize=(6.4, 4.0))
+        ax.plot(ph, yy, '.', ms=2, alpha=alpha_pts)
+        ax.set_xlabel("Phase")
+        ax.set_ylabel("Normalized Flux (post-clean)")
+        ax.set_title(f"Post-clean fold at {tag} = {period_days:.6f} d")
+        ax.axhline(0, ls=':', lw=1, alpha=0.5)
+        ax.grid(True, ls=':', alpha=0.4)
+
+        if stats is not None:
+            f_bic, s_bic   = stats['flat']['bic'], stats['sine']['bic']
+            f_chir, s_chir = stats['flat']['chi2_red'], stats['sine']['chi2_red']
+            preferred = 'sine' if (annotate_metric or 'bic').lower() == 'bic' and s_bic < f_bic else \
+                        ('sine' if s_chir < f_chir else 'flat')
+
+            lw_flat = 2.5 if preferred == 'flat' else 1.5
+            lw_sine = 2.5 if preferred == 'sine' else 1.5
+            ax.plot(stats['ph_fine'], stats['flat_curve'], lw=lw_flat, alpha=0.9)
+            ax.plot(stats['ph_fine'], stats['sine_curve'], lw=lw_sine, alpha=0.9)
+
+            text = (
+                "Model comparison (post-clean)\n"
+                f"flat:  χ²_red={f_chir:.3f},  BIC={f_bic:.2f}\n"
+                f"sine:  χ²_red={s_chir:.3f},  BIC={s_bic:.2f}\n"
+                f"→ preferred: {preferred}"
+            )
+            ax.text(0.02, 0.02, text, transform=ax.transAxes,
+                    ha='left', va='bottom', fontsize=9,
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.85, lw=0.5))
+
+        if out_dir is not None:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            fname = out_dir / f"{target}_postclean_{tag}.png"
+            plt.savefig(fname, dpi=200, bbox_inches='tight')
+        plt.close(fig)
+
+    # Search loop (no detrending to choose period)
+    best = None        # will store (period_s, t0_s, depth, duration_s)
+    meta_best = None   # metadata for best attempt
+
+    for preset in presets_sequence:
+        # Run ultrafast BLS with current preset settings
+        p_s, t0_s, depth, dur_s = bls_ultrafast2(
+            time_s, flux, flux_err,
+            DetrendingName=DetrendingName,
+            ID=ID,
+            min_period_days=min_period_days,
+            max_period_days=max_period_days,
+            q_eff=q_eff,
+            pre_detrend='none',              # stable: do not detrend during search
+            Pbin_seconds_hint=Pbin_seconds_hint,
+            bjd0_hint=bjd0_hint,
+            bic_delta=bic_delta,
+            check_harmonics=check_harmonics, # optional P vs P/2 vs 2P power check
+            plot_harmonics=plot_harmonics    # optional data-only plots
+        )
+        print('p_s: ' + str(p_s))  # debug progress
+
+        # Phase-fold on found period and detect dips
+        phase = ((np.asarray(time_s, float) - t0_s) / p_s) % 1.0
+        is_single, n_dips, info = _detect_single_dip_phase(
+            phase, np.asarray(flux, float),
+            expected_depth=depth,
+            expected_width_phase=(dur_s / p_s if (np.isfinite(dur_s) and np.isfinite(p_s) and p_s > 0) else None),
+            n_bins=detect_bins,
+            min_prom_frac=min_prom_frac,
+            sigma_mult=sigma_mult,
+            distance_mult=distance_mult
+        )
+
+        # Prepare meta-info for this pass
+        meta = dict(
+            preset_used=preset.copy(),
+            period_s=p_s,
+            t0_s=t0_s,
+            depth=depth,
+            duration_s=dur_s,
+            single_dip=is_single,
+            n_dips=n_dips,
+            detect_info=info
+        )
+
+        # Update "best so far"
+        best = (p_s, t0_s, depth, dur_s)
+        meta_best = meta
+
+        # If single dip achieved, optionally do post-clean detrending & plots
+        if is_single:
+            if post_cleanup != 'none':
+                # Normalize once for detrenders
+                y = np.asarray(flux, float)
+                y_med = np.nanmedian(y)
+                y_std = np.nanstd(y - y_med)
+                if not np.isfinite(y_std) or y_std <= 0:
+                    y_std = 1.0
+                yN = (y - y_med) / y_std
+
+                P_final_days = p_s / 86400.0  # for generating candidates
+                candidates = []
+                for mult, tag in [(0.5, "0p5P"), (1.0, "P"), (2.0, "2P")]:
+                    Ph = P_final_days * mult
+                    if min_period_days <= Ph <= max_period_days:
+                        candidates.append((Ph, tag))
+
+                cleanup_info = {}
+                out_dir = _out_dir
+                target = ID or "target"
+
+                # Apply requested post-clean at each harmonic candidate
+                for Ph, tag in candidates:
+                    period_s = Ph * 86400.0
+                    y_det, info_det = _apply_harmonic_detrend(
+                        time_s=time_s, yN=yN, period_s=period_s,
+                        which=post_cleanup, bic_delta=bic_delta,
+                        name=DetrendingName, bjd0_hint=bjd0_hint
+                    )
+                    cleanup_info[tag] = info_det
+
+                    # Post-clean diagnostic plots with model overlays
+                    if plot_harmonics and out_dir is not None:
+                        _post_plot_with_models(
+                            time_s=time_s,
+                            y_det=y_det,
+                            t0_s=t0_s,
+                            period_s=period_s,
+                            tag=tag,
+                            period_days=Ph,
+                            out_dir=out_dir,
+                            target=target,
+                            annotate_metric='bic',
+                            alpha_pts=0.5
+                        )
+
+                meta['post_cleanup'] = dict(method=post_cleanup, info=cleanup_info)
+
+            # Return with meta if success
+            return best + (meta,)
+
+        # If not single and not the coarsest pass, try doubling the period as a quick fix
+        if n_dips > 1 and preset is not COARSE:
+            p2 = 2.0 * p_s  # double-period candidate
+            if (min_period_days * 86400.0) <= p2 <= (max_period_days * 86400.0):
+                phase2 = ((np.asarray(time_s, float) - t0_s) / p2) % 1.0
+                is_single2, n_dips2, info2 = _detect_single_dip_phase(
+                    phase2, np.asarray(flux, float),
+                    expected_depth=depth,
+                    expected_width_phase=(dur_s / p2 if (np.isfinite(dur_s) and np.isfinite(p2) and p2 > 0) else None),
+                    n_bins=detect_bins,
+                    min_prom_frac=min_prom_frac,
+                    sigma_mult=sigma_mult,
+                    distance_mult=distance_mult
+                )
+                if is_single2:
+                    meta2 = dict(
+                        preset_used=preset.copy(),
+                        period_s=p2,
+                        t0_s=t0_s,
+                        depth=depth,
+                        duration_s=dur_s,
+                        single_dip=True,
+                        n_dips=n_dips2,
+                        detect_info=info2,
+                    )
+                    if post_cleanup != 'none':
+                        # Normalize once
+                        y = np.asarray(flux, float)
+                        y_med = np.nanmedian(y)
+                        y_std = np.nanstd(y - y_med)
+                        if not np.isfinite(y_std) or y_std <= 0:
+                            y_std = 1.0
+                        yN = (y - y_med) / y_std
+
+                        P_final_days = p2 / 86400.0
+                        candidates = []
+                        for mult, tag in [(0.5, "0p5P"), (1.0, "P"), (2.0, "2P")]:
+                            Ph = P_final_days * mult
+                            if min_period_days <= Ph <= max_period_days:
+                                candidates.append((Ph, tag))
+
+                        cleanup_info = {}
+                        out_dir = _out_dir
+                        target = ID or "target"
+
+                        for Ph, tag in candidates:
+                            period_s = Ph * 86400.0
+                            y_det, info_det = _apply_harmonic_detrend(
+                                time_s=time_s, yN=yN, period_s=period_s,
+                                which=post_cleanup, bic_delta=bic_delta,
+                                name=DetrendingName, bjd0_hint=bjd0_hint
+                            )
+                            cleanup_info[tag] = info_det
+                            if plot_harmonics and out_dir is not None:
+                                _post_plot_with_models(
+                                    time_s=time_s, y_det=y_det, t0_s=t0_s,
+                                    period_s=period_s, tag=tag, period_days=Ph,
+                                    out_dir=out_dir, target=target,
+                                    annotate_metric='bic', alpha_pts=0.5
+                                )
+                        meta2['post_cleanup'] = dict(method=post_cleanup, info=cleanup_info)
+
+                    return (p2, t0_s, depth, dur_s, meta2)
+
+    # If we exit the loop without a single dip, return the best (finest) result with a note
+    meta_best['note'] = "Single dip not achieved; returning the finest-pass result (no post-clean)."
+    return best + (meta_best,)
+
 # Small utilities
 def _sine_phase_model(phase, A, phi, C):
     '''
