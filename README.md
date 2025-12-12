@@ -89,13 +89,13 @@ Example workflow:
 from stanley_cbp import runDetrendingModule, Stanley_FindPlanets, runAnalysisModule
 
 **Detrending example:**  
-result_det = runDetrendingModule(SystemName="TIC260128333", DetrendingName="DemoDetrend", UseSavedData=0)
+`result_det = runDetrendingModule(SystemName="TIC260128333", DetrendingName="DemoDetrend", UseSavedData=0)`
 
 **Search example:**  
-Stanley_FindPlanets(SearchName="DemoSearch", SystemName="TIC260128333", DetrendingName="DemoDetrend", totalSectors=1, currentSector=1)
+`Stanley_FindPlanets(SearchName="DemoSearch", SystemName="TIC260128333", DetrendingName="DemoDetrend", totalSectors=1, currentSector=1)`
 
 **Analysis example:**  
-analysis_out = runAnalysisModule(searchName="DemoSearch", systemName="TIC260128333", totalSectors=1)
+`analysis_out = runAnalysisModule(searchName="DemoSearch", systemName="TIC260128333", totalSectors=1)`
 
 ## Tutorials
 
