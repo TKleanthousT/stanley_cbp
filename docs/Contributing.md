@@ -32,4 +32,4 @@ source .venv/bin/activate
 pip install -U pip
 pip install -e .[dev]
 ```
-(On Windows, activate the environment with .venv\Scripts\activate.)
+(On Windows, activate the environment with `.venv\Scripts\activate`).
