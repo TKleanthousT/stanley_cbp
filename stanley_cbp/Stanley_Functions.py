@@ -90,9 +90,6 @@ def base_dir() -> Path:
     """
     return _resolve_base_dir(None)
 
-# ---------------------------
-# Output / workspace paths
-# ---------------------------
 
 def p_outputs(search_name: str, *parts) -> Path:
     """
