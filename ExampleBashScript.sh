@@ -16,7 +16,7 @@ set -euo pipefail
 # USER CONFIGURATION
 # ===============================
 
-TargetList=('260128333')  # TIC 260128333
+TargetList=('260128333') 
 
 RUN_ROOT="/cluster/tufts/martinlab/tklean01/testing/PUBLIC_RELEASE_STANLEY/Runs"
 mkdir -p "${RUN_ROOT}"
@@ -30,9 +30,7 @@ RUN_TAG="TestRunTOI1338"
 DETRENDBASE="Detrend_${RUN_TAG}_"
 SEARCHBASE="Search_${RUN_TAG}_"
 
-# ===============================
 # SELECT TARGET
-# ===============================
 
 index=$((SLURM_ARRAY_TASK_ID - 1))
 TIC_ID="${TargetList[$index]}"
@@ -42,9 +40,7 @@ exec > "${LOG_DIR}/stanley-${RUN_TAG}-out-TIC${TIC_ID}.txt" \
 
 echo "[INFO $(date +'%F %T')] Starting job for TIC${TIC_ID}"
 
-# ===============================
 # ENVIRONMENT SETUP
-# ===============================
 
 # We assume "conda" is on PATH (same as your login shell)
 if ! command -v conda >/dev/null 2>&1; then
@@ -74,9 +70,7 @@ print("UserGeneratedData root:", AC.p_user_data(""))
 print("PlanetSearchOutput root:", AC.p_outputs("TEST_SEARCH"))
 EOF
 
-# ===============================
 # RUN STANLEY PIPELINE
-# ===============================
 
 SYSTEM_ARG="TIC${TIC_ID}"
 DETREND_NAME="${DETRENDBASE}${TIC_ID}"

@@ -1,13 +1,11 @@
 # Architecture & Data Layout
 
-This page describes how the Stanley package is organized and where it reads and writes
-data on disk. The goal is a clean, predictable architecture that works identically in:
+This page describes how the Stanley package is organized and where it reads and writes data on disk. The goal is a clean, predictable architecture that works identically in:
 
 - local **Jupyter notebook runs**
 - **cluster SLURM runs**
 
-Stanley always operates inside a single *base directory*, and all user-generated output
-lives underneath it.
+Stanley always operates inside a single *base directory*, and all user-generated output lives underneath it.
 
 ---
 
@@ -30,8 +28,7 @@ At the top level you will see:
 - `README.md`, `LICENSE.txt`, `Contributing.md`  
   Front-page documentation, license, and contribution guidelines.
 
-Other support files such as `.gitignore`, `dist/`, and `stanley_cbp.egg-info/`
-are generated during development and packaging.
+Other support files such as `.gitignore`, `dist/`, and `stanley_cbp.egg-info/` are generated during development and packaging.
 
 ---
 
@@ -41,8 +38,7 @@ The package is organized into functional modules:
 
 ### Configuration & Path Helpers
 
-Helpers that determine the runtime **base directory** and build paths to the standard
-subfolders:
+Helpers that determine the runtime **base directory** and build paths to the standard subfolders:
 
 - `LightCurves/`
 - `PlanetSearchOutput/`
@@ -56,8 +52,7 @@ Load mission data, read/write light curves, and save intermediate products or ta
 
 ### Detrending
 
-Removes binary modulation and trends.  
-Outputs are written under:
+Removes binary modulation and trends. Outputs are written under:
 
 - `LightCurves/Processed/<DetrendingName>/`
 
@@ -84,8 +79,7 @@ Shared helpers: time conversions, math routines, plotting helpers, logging, etc.
 
 ### Databases (Read-Only)
 
-Static mission catalogs are packaged inside the wheel, under the installed package tree.
-They are treated as read-only resources and are not modified by runs.
+Static mission catalogs are packaged inside the wheel, under the installed package tree. They are treated as read-only resources and are not modified by runs.
 
 ---
 
@@ -93,10 +87,8 @@ They are treated as read-only resources and are not modified by runs.
 
 Stanley runs entirely inside a **base directory**:
 
-- In **local Jupyter runs**, `base_dir()` resolves to the folder that contains your
-  notebook.
-- In **cluster runs**, the SLURM script sets an environment variable (for example
-  `STANLEY_WORKDIR`) and `base_dir()` resolves to that directory.
+- In **local Jupyter runs**, `base_dir()` resolves to the folder that contains your notebook.
+- In **cluster runs**, the SLURM script sets an environment variable (for example `STANLEY_WORKDIR`) and `base_dir()` resolves to that directory.
 
 Under this base directory, Stanley creates a consistent data layout:
 
@@ -133,9 +125,7 @@ If your notebook lives in some folder (for example a `Tutorials/` directory), th
 
 ### Cluster SLURM Example
 
-On the cluster, the SLURM script chooses a run root (for example a `Runs/` directory),
-sets an environment variable pointing to it, and changes into that directory before
-calling Stanley. In that case:
+On the cluster, the SLURM script chooses a run root (for example a `Runs/` directory), sets an environment variable pointing to it, and changes into that directory before calling Stanley. In that case:
 
 - `base_dir()` resolves to the run root.
 - Stanley writes:
@@ -144,11 +134,9 @@ calling Stanley. In that case:
   - `PlanetSearchOutput/`
   - `UserGeneratedData/`
 
-  directly underneath that run root. You can also keep a `logs/` directory at the same
-  level for SLURM and pipeline logs.
+  directly underneath that run root. You can also keep a `logs/` directory at the same level for SLURM and pipeline logs.
 
-The important point is that the *structure* is identical: only the absolute location of
-the base directory changes.
+The important point is that the *structure* is identical: only the absolute location of the base directory changes.
 
 ---
 
@@ -161,29 +149,21 @@ A typical workflow looks like:
    - Cluster: the directory selected by the SLURM script.
 
 2. **Load light curves / catalogs**  
-   Light curves are read from `LightCurves/` and static catalogs are read from the
-   packaged databases.
+   Light curves are read from `LightCurves/` and static catalogs are read from the packaged databases.
 
 3. **Detrending**  
-   Detrending routines read raw light curves and write outputs under  
-   `LightCurves/Processed/<DetrendingName>/`.
+   Detrending routines read raw light curves and write outputs under `LightCurves/Processed/<DetrendingName>/`.
 
 4. **Planet Search**  
-   The search engine reads the detrended light curves and writes search products under  
-   `PlanetSearchOutput/<SearchName>/`.
+   The search engine reads the detrended light curves and writes search products under `PlanetSearchOutput/<SearchName>/`.
 
 5. **Analysis & Vetting**  
-   Analysis tools read the search outputs, perform checks and modeling, and write tables
-   and figures.
+   Analysis tools read the search outputs, perform checks and modeling, and write tables and figures.
 
 6. **User-Generated Data**  
-   Any user choices or metadata (manual cuts, injection definitions, etc.) are stored
-   under `UserGeneratedData/`.
+   Any user choices or metadata (manual cuts, injection definitions, etc.) are stored under `UserGeneratedData/`.
 
 7. **Notebooks and Scripts**  
-   The notebooks in `Tutorials/` configure parameters and then call public functions
-   from `stanley_cbp`, so the same code works for tutorials, local analysis, and
-   cluster-scale searches.
+   The notebooks in `Tutorials/` configure parameters and then call public functions from `stanley_cbp`, so the same code works for tutorials, local analysis, and cluster-scale searches.
 
-This architecture keeps code, configuration, and data clearly separated while preserving
-a single, predictable layout for all environments.
+This architecture keeps code, configuration, and data clearly separated while preserving a single, predictable layout for all environments.
