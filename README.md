@@ -33,8 +33,7 @@ Stanley was first validated on the **Kepler** circumbinary-planet sample, where 
 
 ## Repository Structure and Data Requirements
 
-This repository contains only the core **source code** (`stanley_cbp/`).  
-All static catalogs needed at runtime are packaged inside:
+This repository contains only the core **source code** (`stanley_cbp/`). All static catalogs needed at runtime are packaged inside:
 
     stanley_cbp/Databases/
 
