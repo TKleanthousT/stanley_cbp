@@ -57,9 +57,29 @@ When `STANLEY_RUN_ROOT` is set, all runtime products (light curves, diagnostics,
 If `STANLEY_RUN_ROOT` is not set, STANLEY falls back to the default local behavior described above.
 
 ## Installation
-Install from PyPI (future release): pip install stanley_cbp
+Install from PyPI: pip install stanley_cbp
 
 Or install from a locally built wheel: pip install dist/stanley_cbp-0.1.X-py3-none-any.whl
+
+## Environment setup (recommended)
+
+For reproducible installations, this repository provides two Conda environment files:
+
+`environment.yml` — for local machines and Jupyter-based workflows
+
+`clusterEnvironment.yml` — for HPC or cluster environments
+
+Users can create and activate an environment using either file, for example:
+
+`conda env create -f environment.yml`
+`conda activate stanley_env`
+
+or, for cluster usage:
+
+`conda env create -f clusterEnvironment.yml`
+`conda activate stanley_env`
+
+Once the environment is active, install STANLEY using one of the methods above.
 
 ## Using Stanley in Python
 
