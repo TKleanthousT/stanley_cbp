@@ -37,7 +37,7 @@ This repository contains only the core **source code** (`stanley_cbp/`). All sta
 
     stanley_cbp/Databases/
 
-Users do **not** need to download any external data or set a STANLEY_BASE environment variable.
+For standard local or Jupyter-based usage, users do not need to download any external data or set any environment variables.
 
 Instead, when running the pipeline (typically from the `Tutorials/` folder), Stanley automatically creates and manages a local runtime workspace containing:
 
@@ -45,7 +45,16 @@ Instead, when running the pipeline (typically from the `Tutorials/` folder), Sta
 - PlanetSearchOutput/
 - UserGeneratedData/
 
-These folders are created in the same directory from which the user runs the notebook or script (e.g.,`Tutorials/`), and no manual setup is required.
+This workspace is created relative to the working directory and requires no manual configuration.
+
+## Runtime workspace (HPC / cluster use)
+For large-scale or cluster-based runs, users may optionally define a runtime workspace via an environment variable:
+
+`export STANLEY_RUN_ROOT="/path/to/your/STANLEY/Runs"`
+
+When `STANLEY_RUN_ROOT` is set, all runtime products (light curves, diagnostics, and search outputs) are written under this directory instead of the local working directory. This is recommended for HPC environments where scratch space, quotas, or shared filesystems are involved.
+
+If `STANLEY_RUN_ROOT` is not set, STANLEY falls back to the default local behavior described above.
 
 ## Installation
 Install from PyPI (future release): pip install stanley_cbp
