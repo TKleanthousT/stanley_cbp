@@ -47,7 +47,6 @@ subfolders:
 - `LightCurves/`
 - `PlanetSearchOutput/`
 - `UserGeneratedData/`
-- `DiagnosticReports/`
 
 All user-generated data is written *outside* the installed package.
 
@@ -78,9 +77,6 @@ Outputs are written under:
 ### Analysis & Vetting
 
 Produces diagnostic checks, candidate validation, eclipse modeling, and summary documents.  
-Outputs may include files in:
-
-- `DiagnosticReports/`
 
 ### Utilities
 
@@ -116,9 +112,6 @@ Under this base directory, Stanley creates a consistent data layout:
   - injection parameter tables  
   - per-target metadata  
 
-- `DiagnosticReports/`  
-  Vetting plots, summary figures, and diagnostic documents.
-
 This layout is the same whether you are working locally or on a cluster.
 
 ---
@@ -135,7 +128,6 @@ If your notebook lives in some folder (for example a `Tutorials/` directory), th
   - `LightCurves/`
   - `PlanetSearchOutput/`
   - `UserGeneratedData/`
-  - `DiagnosticReports/`
 
   directly underneath that folder.
 
@@ -151,7 +143,6 @@ calling Stanley. In that case:
   - `LightCurves/`
   - `PlanetSearchOutput/`
   - `UserGeneratedData/`
-  - `DiagnosticReports/`
 
   directly underneath that run root. You can also keep a `logs/` directory at the same
   level for SLURM and pipeline logs.
@@ -183,7 +174,7 @@ A typical workflow looks like:
 
 5. **Analysis & Vetting**  
    Analysis tools read the search outputs, perform checks and modeling, and write tables
-   and figures under `DiagnosticReports/` (and possibly additional subfolders).
+   and figures.
 
 6. **User-Generated Data**  
    Any user choices or metadata (manual cuts, injection definitions, etc.) are stored

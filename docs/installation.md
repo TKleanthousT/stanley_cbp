@@ -41,7 +41,6 @@ Nothing. When you run a notebook or script from the Tutorials directory, Stanley
 
 - `LightCurves/`
 - `PlanetSearchOutput/`
-- `DiagnosticReports/`
 - `UserGeneratedData/`
 
 These folders appear in the same directory where you run your notebook or script.

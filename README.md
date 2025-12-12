@@ -44,7 +44,6 @@ Instead, when running the pipeline (typically from the `Tutorials/` folder), Sta
 
 - LightCurves/
 - PlanetSearchOutput/
-- DiagnosticReports/
 - UserGeneratedData/
 
 These folders are created in the same directory from which the user runs the notebook or script (e.g.,`Tutorials/`), and no manual setup is required.
@@ -77,7 +76,7 @@ These notebooks assume:
 
 - a local **stanley_cbp** installation,  
 - that the directory where the notebook is run will automatically function as the runtime workspace,  
-- and that Stanley will generate all required folders (`LightCurves/`, `PlanetSearchOutput/`, `DiagnosticReports/`, `UserGeneratedData/`) as needed.
+- and that Stanley will generate all required folders (`LightCurves/`, `PlanetSearchOutput/`, `UserGeneratedData/`) as needed.
 
 The tutorials demonstrate detrending, running the CBP search, interpreting outputs, and generating diagnostic figures.
 

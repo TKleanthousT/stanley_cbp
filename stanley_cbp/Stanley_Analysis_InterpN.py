@@ -394,9 +394,6 @@ def runAnalysisModule(
         np.transpose([TT_bestFit / days2sec - 55000, TD_bestFit / hours2sec])
     )
     
-    # Return diagnostic report about the search
-    search_diagnostic_pdf = AC.create_search_analysis_diagnostic_report(search_name = searchName, mission = mission, ID = ID, system_label = f"{mission}{ID}")
-
     # Return a compact summary for programmatic use
     return {
         "status": "ok",

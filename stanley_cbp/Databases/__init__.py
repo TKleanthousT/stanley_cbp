@@ -11,5 +11,3 @@ This directory contains CSV tables used throughout the pipeline, including:
 Files in this directory are accessed via:
     importlib.resources.files("stanley_cbp.Databases")
 """
-
-# No imports needed — files are accessed via p_databases() or importlib.resources

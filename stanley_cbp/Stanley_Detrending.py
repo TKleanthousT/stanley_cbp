@@ -662,7 +662,6 @@ def runDetrendingModule(
     else:
         KICorTIC = False
         
-    detrending_diagnostic_pdf = AC.create_detrending_diagnostic_report(detrending_name = DetrendingName, mission = mission, ID = ID, is_kepler = KICorTIC, system_label = f"{mission}{ID}")
     # Return a compact dict useful in logs or downstream batch scripts
     return {
         "mission": mission, "ID": ID,
