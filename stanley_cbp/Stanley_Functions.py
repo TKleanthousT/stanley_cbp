@@ -2088,8 +2088,6 @@ def _try_harmonics_fixed(bls, P_best_days, q_at_best):
 		if p > best[0]:
 			best = (p, float(P))
 	return best[1]
-fbd-901
-
 
 # Small utilities
 def _sine_phase_model(phase, A, phi, C):
