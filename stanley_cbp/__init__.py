@@ -3,7 +3,7 @@ STANLEY: Circumbinary Planet Detection Package
 """
 
 # Package version
-__version__ = "0.1.66"
+__version__ = "0.1.67"
 
 # Public API imports
 from . import Stanley_PlanetSearch_InterpN_DebugPadding as SFP

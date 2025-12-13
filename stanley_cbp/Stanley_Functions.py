@@ -1767,7 +1767,6 @@ def RemoveEclipses(timeOrig, fluxOrig, period, bjd0, prim_pos, sec_pos, pwidth, 
 			fluxClean (np.ndarray): Flux with in-eclipse samples removed.
 			not_nan_indices (tuple): Indices of retained samples (as returned by np.where).
 	'''
-	# make sure we have a phase folded time array, NOT shifted by bjd0
 	if phase_folded.lower() == 'n':
 		# fold by provided ephemeris
 		print('timeOrig: ' + str(timeOrig))
@@ -6665,7 +6664,6 @@ def apply_manual_cuts(
     # --- Resolve cuts_path under the new architecture ---
     if cuts_csv is None:
         # Default: workspace/UserGeneratedData/manual_cuts_TESS.csv
-        print('we have entered apply manual cuts and the conditional that impliments p_user_data!')
         cuts_path = p_user_data("manual_cuts_TESS.csv")
     else:
         cuts_path = Path(cuts_csv)
@@ -10892,7 +10890,6 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
 
     # Optional summary plots
     if plotting:
-        print('we have entered the plotting statement')
 
         def _safe_ylim(ax, yvals, default_center, default_pad):
             if yvals.size:
