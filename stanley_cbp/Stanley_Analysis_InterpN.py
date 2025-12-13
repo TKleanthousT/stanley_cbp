@@ -47,9 +47,7 @@ import time, pylab, argparse, warnings
 from pathlib import Path
 warnings.filterwarnings("ignore")  # Suppress expected numerical warnings
 
-# -------------------------------
 # Package-relative import fallback
-# -------------------------------
 try:
     # When installed as a package
     from . import Stanley_Functions as AC 
@@ -68,17 +66,13 @@ plt.close("all")
 plt.ion
 pylab.ion
 
-# -------------------------------
-# 3A: Use AC base + path helpers
-# -------------------------------
+# Use AC base + path helpers
 BASE = AC.base_dir()
 _p_outputs     = AC.p_outputs
 _p_lightcurves = AC.p_lightcurves
 _p_processed   = AC.p_processed
 
-# -------------------------------
 # Public programmatic entry point
-# -------------------------------
 def runAnalysisModule(
     searchName: str,
     systemName: str,
@@ -409,9 +403,7 @@ def runAnalysisModule(
     }
 
 
-# -------------------------------
 # CLI entry point (cluster usage)
-# -------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run STANLEY analysis module on completed search output."

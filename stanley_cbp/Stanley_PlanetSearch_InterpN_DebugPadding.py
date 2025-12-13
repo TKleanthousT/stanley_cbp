@@ -71,9 +71,7 @@ import multiprocessing
 from functools import partial
 from pathlib import Path
 
-# -------------------------------
 # Package-relative import fallback
-# -------------------------------
 try:
     # package mode
     from . import Stanley_Functions as AC
@@ -85,17 +83,13 @@ except Exception:
     import Stanley_TransitTiming as SSTT
     from Stanley_Constants import *
 
-# -------------------------------
 # 2A: Use AC base + path helpers
-# -------------------------------
 BASE = AC.base_dir()
 _p_outputs     = AC.p_outputs
 _p_processed   = AC.p_processed
 _p_lightcurves = AC.p_lightcurves
 
-# -------------------------------
 # Main search function
-# -------------------------------
 def Stanley_FindPlanets(
     SearchName='BLAH',
     SystemName='Kepler-64',
@@ -129,7 +123,7 @@ def Stanley_FindPlanets(
         None. Saves outputs to PlanetSearchOutput/<SearchName>/ (legacy filenames).
     '''
 
-    # ----- small debug helper -----
+    # small debug helper
     def _ts():
         return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     def _dbg(msg):
@@ -160,7 +154,7 @@ def Stanley_FindPlanets(
     fractionDataPointsHitThreshold = 0.45
     individualDataPointSigmaCutThreshold = 3
 
-    # ---------- STEP 1. LOAD DETRENDED LIGHT CURVE
+    # STEP 1. LOAD DETRENDED LIGHT CURVE
     _dbg("Calling AC.GetID to resolve mission/ID...")
     ID, mission = AC.GetID(SystemName)
     _dbg(f"Resolved: mission = {mission}, ID = {ID}")
@@ -218,7 +212,7 @@ def Stanley_FindPlanets(
     maxTotalLightcurve = np.max(fluxArray)
     _dbg(f"Lightcurve stats: mean={meanTotalLightcurve:.6f}, max={maxTotalLightcurve:.6f}")
 
-    # ---------- STEP 2. DEFINE THE SEARCH GRID
+    # STEP 2. DEFINE THE SEARCH GRID
     t_grid0 = time.time()
     _dbg("Defining base (fixed) binary grids (1-point each)...")
     # legacy 1-point arrays to preserve array shapes
@@ -282,7 +276,7 @@ def Stanley_FindPlanets(
     # Preserve original full list for metadata and shape info
     periodANDtheta_search_orig = periodANDtheta_search.copy()
 
-    # ---------- OUTPUT FOLDER + SECTOR SLICING
+    # OUTPUT FOLDER + SECTOR SLICING
     out_dir = _p_outputs(SearchName)
     if not out_dir.exists():
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -297,7 +291,7 @@ def Stanley_FindPlanets(
         periodANDtheta_search = periodANDtheta_search[startIndex:endIndex]
         _dbg(f"Sliced period count for this sector: {len(periodANDtheta_search)}")
 
-    # ---------- METADATA OUTPUTS (LEGACY NAMES) ON SECTOR 1
+    # METADATA OUTPUTS (LEGACY NAMES) ON SECTOR 1
     periodANDtheta_search_orig_list = [[pt[0], list(pt[1])] for pt in periodANDtheta_search_orig]
     eccANDomega_search_list = [[eo[0], list(eo[1])] for eo in eccANDomega_search]
     z = (
@@ -317,7 +311,7 @@ def Stanley_FindPlanets(
         np.save(str(siminfo_base), simInfo)
         _dbg(f"Saved simInfo to {siminfo_base}.npy")
 
-    # ---------- PARAMETER-SPACE SUMMARY (LEGACY PRINTS)
+    # PARAMETER-SPACE SUMMARY (LEGACY PRINTS)
     numParams = 1
     for ii in range(0, 6):
         numParams *= len(z[ii])
@@ -355,8 +349,7 @@ def Stanley_FindPlanets(
     ), flush=True)
     _dbg(f"Search setup done in {round(time.time() - t_grid0, 2)} s total since grid start")
 
-    # ------- SEARCH ------- #
-
+    # SEARCH
     # (legacy) predeclare logging flag/filename (kept false by default)
     do_logging = False
     log_filename = _p_outputs(SearchName, f"{mission}_{ID}_log_of_searchResults_sector_{currentSector}")
@@ -509,7 +502,7 @@ def Stanley_FindPlanets(
         else:
             searchResults[index] = -29
 
-    # ---------- SAVE OUTPUTS (LEGACY FILENAMES)
+    # SAVE OUTPUTS (LEGACY FILENAMES)
     _dbg("Main loop complete, saving outputs...")
 
     out_arr_base = _p_outputs(SearchName, f"{mission}_{ID}_searchResults_array_{totalSectors}_{currentSector}")
@@ -527,9 +520,7 @@ def Stanley_FindPlanets(
     _dbg(f"Sector {currentSector} finished at {now}")
     _dbg("=== END Stanley_FindPlanets ===")
     
-# -------------------------------
 # Parallel wrappers (cluster)
-# -------------------------------
 def parallel(args):
     '''
     Execute Stanley_FindPlanets in parallel across multiple sectors using multiprocessing.
@@ -574,9 +565,7 @@ def array(args):
     Stanley_FindPlanets(SearchName, SystemName, DetrendingName, totalSectors, onCluster, currentSector, N_interp=interpValue, BoundsType=boundsType, MinValue=MinValue, MaxValue=MaxValue, e_max_planet=e_max_planet)
     print(f"[{datetime.datetime.now()}] array(args) complete", flush=True)
 
-# -------------------------------
 # CLI
-# -------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--searchName", type=str, help="A unique identifier for the simulation", default='DefaultSearch')

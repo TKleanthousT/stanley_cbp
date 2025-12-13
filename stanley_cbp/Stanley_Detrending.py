@@ -65,9 +65,7 @@ from scipy import optimize
 from pathlib import Path
 from typing import Optional
 
-# -------------------------------
 # Package-relative import fallback
-# -------------------------------
 try:
     # package mode (when run via: python -m Code.Stanley_Detrending)
     from . import Stanley_Functions as AC
@@ -79,9 +77,7 @@ except Exception:
     import Stanley_TransitTiming as SSTT
     from Stanley_Constants import *
 
-# -------------------------------
-# Paths: delegate to AC (single source of truth)
-# -------------------------------
+# Paths: delegate to AC
 BASE = AC.base_dir()  # pathlib.Path
 
 def _p_lc(*parts) -> Path:
@@ -167,7 +163,6 @@ def runDetrendingModule(
     print('System Name = ' + SystemName)
     print(f'{mission} = ' + ID)
     print('Detrending Name = ' + DetrendingName)
-    print("------")
     print('----- DETRENDING SETTINGS -----')
     print('Quadratic = ' + str(detrending_quadratic))
     print('Iterative Cosine = ' + str(detrending_iterativeCosine))
@@ -185,8 +180,6 @@ def runDetrendingModule(
     print('Inject Transits = ' + str(detrending_injectTransits))
     print('Ellipsoidal Detrending = ' + str(detrending_ellipsoidal))
     print('Reflection Detrending = ' + str(detrending_reflection))
-    print("------")
-
     print('----- LOADING SYSTEM -----')
 
     # Load, cut eclipses, and (optionally) reuse cached data
@@ -670,9 +663,7 @@ def runDetrendingModule(
     }
 
 
-# -------------------------
 # CLI: argument parsing
-# -------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--systemName", type=str, help="Name of the system (KIC/TIC)", default="6762829")

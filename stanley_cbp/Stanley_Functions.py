@@ -16,9 +16,7 @@ from matplotlib.backends.backend_pdf import PdfPages   # >>> NEW
 from collections import namedtuple
 from astroquery.mast import Catalogs
 
-# ------------------------------------------------------------
-# PACKAGE / REPO DUAL-MODE INTERNAL IMPORTS (FIXED)
-# ------------------------------------------------------------
+# PACKAGE / REPO DUAL-MODE INTERNAL IMPORTS
 try:
     # package mode: stanley_cbp.Stanley_TransitTiming, stanley_cbp.Stanley_Constants
     from . import Stanley_TransitTiming as SSTT
@@ -27,7 +25,6 @@ except ImportError:
     # flat repo mode: direct imports
     import Stanley_TransitTiming as SSTT
     from Stanley_Constants import *
-# ------------------------------------------------------------
 
 import wotan
 import itertools
@@ -139,10 +136,7 @@ def p_user_data(*parts, debug=False) -> Path:
 
 
 
-# ---------------------------
 # Packaged databases
-# ---------------------------
-
 def p_databases(*parts) -> Path:
     """
     Return a path to a file inside the packaged Databases directory.
@@ -571,9 +565,7 @@ def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
         else:
             timeCut, fluxCut = timeOrig, fluxOrig
 
-        # ------------------------------------------------------------
         # Save phase plots (ORIGINAL + ECLIPSES REMOVED) for KIC run
-        # ------------------------------------------------------------
         base = _resolve_base_dir(None)
         my_folder = base / 'LightCurves' / 'Figures' / DetrendingName
         my_folder.mkdir(parents=True, exist_ok=True)
@@ -608,8 +600,6 @@ def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
                 plt.close(fig2)
             except Exception as e:
                 print(f"[ERROR saving eclipses-removed phase plot for {mission} {ID}]: {e}")
-
-        # ------------------------------------------------------------
 
         # Create the REBOUND simulation aligned with light curve start time
         sim = CreateReboundSim(Pbin, ecc, omega, mA, mB, RA, RB, bjd0, timeOrig[0])
@@ -778,9 +768,7 @@ def LoadDataTIC(
     # Keep a representative median flux uncertainty for dict outputs
     median_flux_err = float(np.nanmedian(fluxErrOrig))
 
-    # ----------------------------------------------------------------------
     # Manual cuts: interactive or non-interactive, controlled by flags
-    # ----------------------------------------------------------------------
     if use_manual_cuts:
         if interactive_cuts:
             print("Running interactive manualCuts to define or update cuts...")
@@ -808,9 +796,7 @@ def LoadDataTIC(
     # Preserve copies for later plotting/persistence (original sampling)
     timeOrigCopy, fluxOrigCopy, fluxErrOrigCopy = np.copy(timeOrig), np.copy(fluxOrig), np.copy(fluxErrOrig)
 
-    # ----------------------------------------------------------------------
     # Sort & chunk (by gaps)
-    # ----------------------------------------------------------------------
     sortedTime, sortedFlux, sortedFluxErr = sorting(timeOrig, fluxOrig, fluxErrOrig)
 
     # chunk_by_gaps expects time in days; convert a copy for gap detection
@@ -860,9 +846,7 @@ def LoadDataTIC(
     fluxQErr = np.concatenate(fluxErrQFlat)
     timeQ = np.concatenate(timeQFlat) * days2sec  # seconds
 
-    # ----------------------------------------------------------------------
     # Remove edges around gaps (seconds)
-    # ----------------------------------------------------------------------
     dts = np.diff(timeQ)
     to_remove_mask = np.zeros(timeQ.shape, dtype=bool)
     no_gap = 121           # 2-min cadence nominal separation (in seconds)
@@ -894,9 +878,7 @@ def LoadDataTIC(
     plt.show()
     plt.close()
 
-    # ----------------------------------------------------------------------
     # Catalogs & Params
-    # ----------------------------------------------------------------------
     antic = False
     orbit_data_found = False
     stellar_data_found = False
@@ -920,9 +902,7 @@ def LoadDataTIC(
     mA = mB = rA = rB = tA = tB = a = metallicity = flux_ratio = np.nan
     eccANTIC = omegaANTIC = np.nan
 
-    # ----------------------------------------------------------------------
     # ANTIC path
-    # ----------------------------------------------------------------------
     if len(row_ANTIC) == 1:
         antic = True
         print("Orbit and stellar data found in ANTIC")
@@ -1102,9 +1082,7 @@ def LoadDataTIC(
         if not np.isfinite(flux_ratio):
             flux_ratio = MassRadiusLuminosityRelation(mB, rB) / MassRadiusLuminosityRelation(mA, rA)
 
-    # ----------------------------------------------------------------------
     # Villanova-only path
-    # ----------------------------------------------------------------------
     if (not orbit_data_found) and (len(row_Villanova) == 1):
         orbit_data_found = True
         print("Orbit data found entirely from Villanova")
@@ -1193,9 +1171,7 @@ def LoadDataTIC(
     pdepth = orbit_stellar_params.get("pdepth", np.nan)
     sdepth = orbit_stellar_params.get("sdepth", np.nan)
 
-    # ----------------------------------------------------------------------
     # Eclipse modeling
-    # ----------------------------------------------------------------------
     (
         timeCut,
         fluxCut,
@@ -1312,9 +1288,7 @@ def LoadDataTIC(
         "median_flux_err": -27,  # placeholder to keep structure consistent
     }
 
-    # ----------------------------------------------------------------------
     # Prepare output directories for figures and prepped data
-    # ----------------------------------------------------------------------
     base = _resolve_base_dir(None)
     my_folder_Tess = base / "LightCurves" / "Data_Preparation" / DetrendingName
     my_folder_Tess.mkdir(parents=True, exist_ok=True)
@@ -1371,9 +1345,7 @@ def LoadDataTIC(
                 print(f"[ERROR saving] {target_path}: {e}")
         plt.close(fig2)
 
-    # ----------------------------------------------------------------------
     # Rebound simulation
-    # ----------------------------------------------------------------------
     print(
         "Creating rebound simulation with:",
         "Pbin:", Pbin / days2sec,
@@ -6129,7 +6101,6 @@ def remove_spurious_deep_points(
     base = _resolve_base_dir(None)
     out_dir = base / "LightCurves" / "Data_Preparation" / str(DetrendingName)
     out_dir.mkdir(parents=True, exist_ok=True)
-    # ----------------------------------------
 
     def calculate_reduced_chi_squared(residuals, errors, num_params):
         e = np.asarray(errors if errors is not None else np.zeros_like(residuals), float)
