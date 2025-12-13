@@ -79,9 +79,9 @@ DETREND_NAME="${DETRENDBASE}${TIC_ID}"
 SEARCH_NAME="${SEARCHBASE}${TIC_ID}"
 
 echo "[INFO] Using:"
-echo "  SYSTEM_ARG    = ${SYSTEM_ARG}"
-echo "  DETREND_NAME  = ${DETREND_NAME}"
-echo "  SEARCH_NAME   = ${SEARCH_NAME}"
+echo "SYSTEM_ARG = ${SYSTEM_ARG}"
+echo "DETREND_NAME = ${DETREND_NAME}"
+echo "SEARCH_NAME = ${SEARCH_NAME}"
 
 echo "[INFO $(date +'%F %T')] Running detrending..."
 python -m stanley_cbp.Stanley_Detrending \
