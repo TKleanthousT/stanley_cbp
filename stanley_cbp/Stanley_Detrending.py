@@ -111,6 +111,7 @@ def runDetrendingModule(
     detrending_iterativeCosine: bool = True,
     detrending_plugHoles: bool = False,
     detrending_variableDuration: bool = False,
+    detrending_sineFit: bool = False,
     detrending_removeKinks: bool = True,
     detrending_removeCommonFalsePositives: bool = True,
     detrending_findPotentialLedges: bool = True,
@@ -167,6 +168,7 @@ def runDetrendingModule(
     print('Quadratic = ' + str(detrending_quadratic))
     print('Iterative Cosine = ' + str(detrending_iterativeCosine))
     print('Variable Biweight = ' + str(detrending_variableDuration))
+    print('Sine Fit = ' + str(detrending_sineFit))
     print('Plug Holes = ' + str(detrending_plugHoles))
     print('Remove Common False Positives = ' + str(detrending_removeCommonFalsePositives))
     print('Remove Kinks = ' + str(detrending_removeKinks))
@@ -447,6 +449,14 @@ def runDetrendingModule(
     figTrends.savefig(str(figs_dir / f"{mission}_{ID}_{DetrendingName}_trends.png"), bbox_inches='tight')
     plt.show(block=False)
 
+    #sinusoidal detrending
+    if (detrending_sineFit):
+        print('----- SINE FIT DETRENDING -----')
+        timeFinal, fluxFinal, trendSineFit, windowLengthFinal = AC.Detrending_SineFit(timeFinal,fluxFinal, windowLengthFinal)
+        print('----- SINE FIT DETRENDING SUCCESSFULLY FINISHED -----')
+    timeSineFitDetrended = np.copy(timeFinal)
+    fluxSineFitDetrended = np.copy(fluxFinal)
+
     # Optional removal of filled gaps
     if (detrending_plugHoles == True):
         timeFinal, fluxFinal, windowLengthFinal = AC.Detrending_RemoveHoles(timeFinal, fluxFinal, windowLengthFinal, holeIndex)
@@ -688,6 +698,7 @@ if __name__ == "__main__":
         detrending_iterativeCosine=True,
         detrending_plugHoles=False,
         detrending_variableDuration=False,
+        detrending_sineFit=False,
         detrending_removeKinks=True,
         detrending_removeCommonFalsePositives=True,
         detrending_findPotentialLedges=True,

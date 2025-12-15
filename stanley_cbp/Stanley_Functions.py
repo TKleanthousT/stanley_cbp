@@ -12760,3 +12760,165 @@ def bin_and_plot_lightcurve(
 
     return np.array(binned_btjd), binned_flux, binned_flux_err
 
+def Detrending_SineFit(timeArray, fluxArray, windowLengthFinal):
+    """
+    Functionality:
+    Break the light curve into consecutive chunks based on the dominant periodicity in the data.
+    For each chunk to detrend (length ~0.5 * rangeFitMultiplier * P_peak), fit a sine/cosine trend 
+    on a wider window (adds ~0.5 chunk before and after), excluding points near the deepest dips, 
+    then detrend via division by the model.
+    Any chunk without enough data coverage (e.g., gaps) is not detrended and is cut from the output.
+
+    Arguments:
+    timeArray : 1D array
+        Time stamps (seconds; later converted internally to days and shifted by 55000).
+    fluxArray : 1D array
+        Flux values aligned with timeArray.
+    windowLengthFinal : 1D array
+        Per-cadence window length metadata aligned with timeArray; trimmed consistently with any cuts.
+
+    Returns:
+    timeSineFitDetrended : 1D array
+        Time stamps (seconds) after cutting undetrended regions.
+    fluxSineFitDetrended : 1D array
+        Detrended flux (flux / fitted sine model) after cutting undetrended regions.
+    trendSineFit : 1D array
+        The fitted sine/cosine trend evaluated on the detrended portion, after cutting undetrended regions.
+    windowLengthFinal : 1D array
+        Trimmed windowLengthFinal aligned with the returned time/flux arrays.
+    """
+    # Identify deep points to exclude from the sine fit (e.g., eclipses/transits)
+    timeDeepList = Detrending_FindDeepestPoints_core(timeArray, fluxArray)
+
+    # Convert to days and shift to reduce numerical scale for periodogram/fitting
+    timeArray = timeArray / days2sec - 55000
+    timeDeepList = timeDeepList / days2sec - 55000
+
+    rangeFitMultiplier = 6 # total fit window size in units of P_peak (implemented via halfRange below)
+    cadence = 29.4 / 60 / 24 # Kepler cadence in days
+    deepPointDuration = 1 # exclusion width (days) around each deep point
+
+    # Build a mask for points to exclude from the fit (within +/- deepPointDuration/2 of each deep point)
+    mask_deepPoint = (
+        (timeArray >= timeDeepList[0] - deepPointDuration / 2)
+        & (timeArray <  timeDeepList[0] + deepPointDuration / 2)
+    )
+    for ii_deepPoint in range(1, len(timeDeepList)):
+        mask_deepPoint = mask_deepPoint | (
+            (timeArray >= timeDeepList[ii_deepPoint] - deepPointDuration / 2)
+            & (timeArray <  timeDeepList[ii_deepPoint] + deepPointDuration / 2)
+        )
+
+    from astropy.timeseries import LombScargle
+    from scipy.optimize import curve_fit
+
+    # Find dominant frequency via Lomb–Scargle, restricting to below Nyquist
+    frequency, power = LombScargle(timeArray, fluxArray).autopower()
+    f_nyq = 0.5 / cadence
+    mask_f = frequency < f_nyq
+    f_peak = frequency[mask_f][np.argmax(power[mask_f])]
+    p_peak = 1 / f_peak
+
+    # Chunking: each detrend chunk has length (halfRange * P_peak); fit window spans 2*halfRange*P_peak
+    halfRange = rangeFitMultiplier / 2
+    total_range_time = timeArray[-1] - timeArray[0]
+    num_section = np.ceil(total_range_time / (halfRange * p_peak))
+
+    # Model: cosine with amplitude, frequency, phase, and offset
+    def func(x, amp, f, phase, offset):
+        return amp * np.cos(2 * np.pi * x * f - phase) + offset
+
+    # Preallocate outputs (zeros indicate "not detrended / to be cut")
+    fluxSineFitDetrended = np.zeros(len(fluxArray))
+    trendSineFit = np.zeros(len(fluxArray))
+
+    for ii_fit in range(0, int(num_section)):
+        # Fit window includes +/- 0.5 chunk around the detrend window (i.e., a 2-chunk-wide fit region)
+        range_time_fit = [
+            timeArray[0] + (ii_fit - 0.5) * halfRange * p_peak,
+            timeArray[0] + (ii_fit + 1.5) * halfRange * p_peak,
+        ]
+        # Detrend window is the central chunk
+        range_time_detrend = [
+            timeArray[0] + (ii_fit) * halfRange * p_peak,
+            timeArray[0] + (ii_fit + 1) * halfRange * p_peak,
+        ]
+
+        mask_lc_fit = (timeArray >= range_time_fit[0]) & (timeArray < range_time_fit[1])
+        mask_lc_detrend = (timeArray >= range_time_detrend[0]) & (timeArray < range_time_detrend[1])
+
+        # Only proceed if there's something to detrend and enough baseline to constrain the sine fit
+        if (np.sum(mask_lc_detrend) > 0) and (np.sum(mask_lc_fit) * cadence > 2 * p_peak):
+            detrend_idx = [
+                np.min(np.argwhere(mask_lc_detrend)),
+                np.max(np.argwhere(mask_lc_detrend)) + 1,
+            ]  # kept for parity with original behavior (not used downstream)
+
+            # Fit uses the expanded window but excludes deep points
+            timeArray_fit = timeArray[mask_lc_fit & ~mask_deepPoint]
+            fluxArray_fit = fluxArray[mask_lc_fit & ~mask_deepPoint]
+
+            # Initial guess: amplitude ~ 4*std, frequency from LS peak, phase=0, offset~1
+            std = np.std(fluxArray_fit)
+            popt, pcov = curve_fit(
+                func,
+                timeArray_fit,
+                fluxArray_fit,
+                p0=[std * 4, f_peak, 0, 1],
+            )
+
+            # Evaluate model on the detrend window and divide it out
+            flux_model = func(timeArray[mask_lc_detrend], *popt)
+            fluxSineFitDetrended[mask_lc_detrend] = fluxArray[mask_lc_detrend] / flux_model
+            trendSineFit[mask_lc_detrend] = flux_model
+
+    # Cut out anything that never got detrended (still zero)
+    mask_cut = fluxSineFitDetrended == 0
+    timeSineFitDetrended = timeArray[~mask_cut]
+    fluxSineFitDetrended = fluxSineFitDetrended[~mask_cut]
+    trendSineFit = trendSineFit[~mask_cut]
+    windowLengthFinal = windowLengthFinal[~mask_cut]
+
+    # Convert time back to seconds and unshift
+    return (timeSineFitDetrended + 55000) * days2sec, fluxSineFitDetrended, trendSineFit, windowLengthFinal
+
+def Detrending_FindDeepestPoints_core(timeArray, fluxArray):
+    """
+    Functionality:
+        Identify the N deepest flux excursions in a detrended light curve and
+        return their time stamps. For each deepest point found, a fixed-width
+        window centered on that time is excluded from subsequent searches to
+        prevent selecting the same event multiple times.
+
+    Arguments:
+        timeArray (array-like):
+            Time stamps in seconds (BJD), aligned with fluxArray.
+        fluxArray (array-like):
+            Detrended flux array (same length as timeArray).
+
+    Returns:
+        timeDeepList (ndarray):
+            Array of time stamps (seconds) corresponding to the deepest flux
+            excursions found in the light curve.
+    """
+    deepPointDuration = 24 * hours2sec
+    deepPointCount = 9
+
+    timeTemp = np.copy(timeArray)
+    fluxTemp = np.copy(fluxArray)
+    timeDeepList = np.array([])
+
+    for ii in range(0, deepPointCount):
+        # Identify the current deepest flux point
+        indexDeepest = np.argmin(fluxTemp)
+        timeDeepest = timeTemp[indexDeepest]
+        timeDeepList = np.append(timeDeepList, timeDeepest)
+
+        # Exclude a fixed-duration window around this event from further searches
+        mask_local = (
+            (timeTemp > timeDeepest - deepPointDuration / 2)
+            & (timeTemp < timeDeepest + deepPointDuration / 2)
+        )
+        fluxTemp[mask_local] = np.ones(np.sum(mask_local))
+
+    return timeDeepList
