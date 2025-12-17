@@ -5,7 +5,11 @@ In addition to this reduced transit count, circumbinary transits are fundamental
 
 The combined impact of these effects is illustrated in the figure below, which places the known circumbinary planet population in orbital period–radius space alongside the broader single-star exoplanet population. While small planets (roughly Earth–to–Neptune sized) dominate the single-star population, there is a striking absence of small circumbinary planets. This is particularly puzzling given that there is no clear theoretical reason to expect planet formation in circumbinary disks to strongly suppress the production of small planets. Instead, the observed deficit is widely interpreted as a detection bias, driven by the combination of longer orbital periods, fewer transits, and highly variable transit timing and duration.
 
-![Circumbinary planets occupy long-period parameter space and show a deficit of small planets compared to single-star systems](docs/figures/CBPmap.png)
+<div align="center">
+  <img src="docs/figures/CBPmap.png" alt="Orbital period–radius distribution of circumbinary and single-star planets" width="650">
+
+  <p><b>Figure 1.</b> Orbital period–radius distribution of known circumbinary planets (blue points) compared to the single-star exoplanet population (black points). Circumbinary planets cluster at longer orbital periods and exhibit a notable absence of small planets relative to single-star systems, motivating dedicated searches for this missing population with the <i>Stanley</i> pipeline.</p>
+</div>
 
 Motivated by this apparent “missing population,” Stanley was developed to systematically search for small circumbinary planets that are likely being missed by conventional methods. By coupling robust eclipsing-binary characterization with dynamically informed, variable-duration, non-periodic transit searches, Stanley remains sensitive to precisely the class of signals that evade traditional single-star pipelines. To date, Stanley is the primary automated framework designed to conduct large-scale searches for small circumbinary planets in space-based photometric data, enabling both targeted discoveries and demographic studies of this unexplored population.
 
