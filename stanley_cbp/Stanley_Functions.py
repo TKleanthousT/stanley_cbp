@@ -9595,6 +9595,7 @@ def Detrending_IterativeCosine(timeArray, fluxArray, duration_array,
     # Make an initial copy
     timeCosineFiltered = np.copy(timeArray)
     fluxCosineFiltered = np.copy(fluxArray)
+    trendCosineFiltered = np.zeros_like(timeArray)
     subplotCounter = 1
     sufficientDetrendingReached = False
 
