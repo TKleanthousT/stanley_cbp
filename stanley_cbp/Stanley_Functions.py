@@ -1698,17 +1698,17 @@ def InOutEclipse(phase_orig, timeOrig, fluxOrig, prim_pos, sec_pos, pwidth, swid
 	# returns NaN pair for anything within an eclipse window
 	if cuts.lower() == "both":
 		# outside both eclipse windows?
-		outside_primary = phase_distance(phase_orig, prim_pos) > pwidth / 2
-		outside_secondary = phase_distance(phase_orig, sec_pos) > swidth / 2
+		outside_primary = phase_distance(phase_orig, prim_pos) > pwidth
+		outside_secondary = phase_distance(phase_orig, sec_pos) > swidth
 		if outside_primary and outside_secondary:
 			return timeOrig, fluxOrig
 	elif cuts.lower() == "primary":
 		# keep only samples outside primary
-		if phase_distance(phase_orig, prim_pos) > pwidth / 2:
+		if phase_distance(phase_orig, prim_pos) > pwidth:
 			return timeOrig, fluxOrig
 	elif cuts.lower() == "secondary":
 		# keep only samples outside secondary
-		if phase_distance(phase_orig, sec_pos) > swidth / 2:
+		if phase_distance(phase_orig, sec_pos) > swidth:
 			return timeOrig, fluxOrig
 
 	# if inside eclipse (per selected cuts), drop the point by returning NaNs
