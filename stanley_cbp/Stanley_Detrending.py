@@ -195,7 +195,6 @@ def runDetrendingModule(
     else:
         timeCut, fluxCut = timeCutNotBinned, fluxCutNotBinned
 
-    print('Check time units after Kepler binning: ' + str(timeCut[0]))
     print("Pbin: " + str(orbit_params.get('Pbin')) + "\nbjd0: " + str(orbit_params.get('bjd0')) + "\nprim_pos: " + str(orbit_params.get('prim_pos')) + "\npwidth: " + str(orbit_params.get('pwidth')) + "\npdepth: " + str(orbit_params.get('pdepth')) + "\nsec_pos: " + str(orbit_params.get('sec_pos')) + "\nswidth: " + str(orbit_params.get('swidth')) + "\nsdepth: " + str(orbit_params.get('sdepth')) + "\nsep: " + str(orbit_params.get('sep')) + "\ne: " + str(orbit_params.get('e')) + "\nomega: " + str(orbit_params.get('omega')) + "\nDays of data: " + str((len(timeOrig)) * 2 / 60 / 24))
 
     # Rebound API update: use .orbits() in newer versions
@@ -259,7 +258,6 @@ def runDetrendingModule(
                 injection_param_file=injection_param_file
             )
         else:
-            print('entering manual_wata injection type')
             timeFinal, fluxFinal = AC.InjectTransits(
                 timeFinal, fluxFinal,
                 KIC=ID, DetrendingName=DetrendingName,
@@ -369,8 +367,6 @@ def runDetrendingModule(
     if (detrending_iterativeCosine == True):
         print('----- RUNNING ITERATIVE COSINE DETRENDING -----')
         iterative_cosine_factor_array = np.array([3, 2])
-        print('iterative_cosine_factor_array = ' + str(iterative_cosine_factor_array))
-        print("THIS IS THE UNITS WE ARE READING INTO ITERATIVE COSINE: " + str(timeFinal))
         timeFinal, fluxFinal, trendCosineDetrended = AC.Detrending_IterativeCosine(
             timeFinal, fluxFinal, durationArray, SystemName, DetrendingName, mission, ID, factor=iterative_cosine_factor_array
         )
@@ -512,7 +508,7 @@ def runDetrendingModule(
         diff = np.abs(1 - fluxForQualityTesting) / lc_std
 
         num_outliers = len(diff[diff > sigma_cutoff])
-        print('number of outliers = ' + str(num_outliers))
+        print('Number of outliers = ' + str(num_outliers))
 
         outlier_removal_steps += 1
 

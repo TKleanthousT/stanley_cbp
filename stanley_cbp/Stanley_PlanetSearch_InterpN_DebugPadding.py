@@ -526,7 +526,11 @@ def parallel(args):
     Execute Stanley_FindPlanets in parallel across multiple sectors using multiprocessing.
     '''
     print(f"[{datetime.datetime.now()}] Entering parallel(args)", flush=True)
-    pool = multiprocessing.Pool()
+    if args.cpuCount == 0:
+        cpuCount = multiprocessing.cpu_count()
+    else:
+        cpuCount = args.cpuCount
+    pool = multiprocessing.Pool(cpuCount)
     SearchName = args.searchName
     SystemName = args.systemName
     DetrendingName = args.detrendingName
@@ -575,6 +579,7 @@ if __name__ == "__main__":
     parser.add_argument("--currentSector", type=int, help="Current sector (1-indexed)", default=1)
     parser.add_argument("--onCluster", type=int, help="Are we on a cluster? (0/1)", default=0)
     parser.add_argument("--parallel", type=int, help="Run all sectors in parallel? (0/1)", default=0)
+    parser.add_argument("--cpuCount", type=int, help="Number of CPUs to use in parallel mode", default=0)
     parser.add_argument("--interpolationValue", type=int, help="Skip N thetas and interpolate", default=1)
     parser.add_argument("--boundsType", type=str, help="Type of bounds for period grid", default=None)
     parser.add_argument("--minValue", type=float, help="Minimum value for period grid", default=None)

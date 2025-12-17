@@ -1741,9 +1741,7 @@ def RemoveEclipses(timeOrig, fluxOrig, period, bjd0, prim_pos, sec_pos, pwidth, 
 	'''
 	if phase_folded.lower() == 'n':
 		# fold by provided ephemeris
-		print('timeOrig: ' + str(timeOrig))
 		phase_orig = ((timeOrig - bjd0) / period) % 1
-		print('phase_orig: ' + str(phase_orig))
 	elif phase_folded.lower() == 'y':
 		# already folded (assumed shifted by bjd0 upstream)
 		phase_orig = timeOrig % 1  # already folded, assuming already shifted by bjd0
@@ -1756,8 +1754,6 @@ def RemoveEclipses(timeOrig, fluxOrig, period, bjd0, prim_pos, sec_pos, pwidth, 
 		itertools.repeat(pwidth), itertools.repeat(swidth),
 		itertools.repeat(cuts)
 	))
-	print('time after removal: ' + str(time))
-	print('flux after removal: ' + str(flux))
 
 	# ensure we are returning arrays
 	timeCut = np.array(time)
@@ -1768,8 +1764,6 @@ def RemoveEclipses(timeOrig, fluxOrig, period, bjd0, prim_pos, sec_pos, pwidth, 
 	timeClean = timeCut[not_nan_indices]
 	fluxClean = fluxCut[not_nan_indices]
 	
-	print('timeClean: ' + str(timeClean))
-	print('fluxClean: ' + str(fluxClean))
 	return timeClean, fluxClean, not_nan_indices
 
 def get_available_cores():
@@ -2873,7 +2867,6 @@ def iterative_bls_single_dip_search(
             check_harmonics=check_harmonics, # optional P vs P/2 vs 2P power check
             plot_harmonics=plot_harmonics    # optional data-only plots
         )
-        print('p_s: ' + str(p_s))  # debug progress
 
         # Phase-fold on found period and detect dips
         phase = ((np.asarray(time_s, float) - t0_s) / p_s) % 1.0
@@ -4738,7 +4731,7 @@ def modelEclipse3(
 
     if _use_prior:
         knownEclipse = classify_known_eclipse_local(prim_pos, sec_pos)
-        print('knownEclipse:', knownEclipse)
+        print('We have the following known eclipse(s):', knownEclipse)
         phaseTime = ((t - bjd0) * invP + 0.5) % 1.0
     else:
         knownEclipse = "none"
@@ -8333,7 +8326,6 @@ def calcOrbitalElementsOverTime_nbody(
             # heuristic slow-sim check
             if (tempSim.t / tMax > 0.2):
                 if (TIME.time() - realTimeNote > 5. * realTimeTaken):
-                    print('Shit is slowing down, break')
                     break
 
     # Convert the timeArray from a list to a np array
@@ -9626,7 +9618,6 @@ def Detrending_IterativeCosine(timeArray, fluxArray, duration_array,
                     'progressive', SystemName, DetrendingName, mission, ID, subplotCounter,
                     base_dir=base_dir
                 )
-				#print('cosineFilterWindowLength (days) = ' + str(cosineFilterWindowLength/days2sec))
                 subplotCounter += 1
                 if (cosineFilterWindowLength != -27):
 					# this means that a peak in the periodogram above the designated fap has been found, so we need to do some detrending
@@ -9635,17 +9626,12 @@ def Detrending_IterativeCosine(timeArray, fluxArray, duration_array,
                     fluxCosineFiltered = np.array([])
                     trendCosineFiltered = np.array([])
                     sectorDataPoints = int(len(timeArray)/numSectors)
-                    print('2')
-					#print('numSectors = ' + str(numSectors))
                     for ii in range(0,numSectors):
-						#print('ii = ' + str(ii))
                         timeSegment = timeArray[ii*sectorDataPoints:(ii+1)*sectorDataPoints]/days2sec - 55000
                         fluxSegment = fluxArray[ii*sectorDataPoints:(ii+1)*sectorDataPoints]
 						# Suppress output text
                         text_trap = io.StringIO()
                         sys.stdout = text_trap
-						#print(timeFinal)
-						#print(fluxFinal)
                         fluxCosineFilteredSegment, trendCosineFilteredSegment = wotan.flatten(time=timeSegment,flux=fluxSegment,method='cosine',robust=True,break_tolerance=0.5,window_length=cosineFilterWindowLength/days2sec,return_trend=True)
 						# allow printing output again
                         sys.stdout = sys.__stdout__
@@ -9732,7 +9718,6 @@ def Detrending_IterativeCosine2(timeOrig, fluxOrig, timeCut, fluxCut,
                     base_dir=base_dir
                 )
                 subplotCounter += 1
-                print('first')
 
                 if (cosineFilterWindowLength != -27):
                     numSectors = 5
@@ -9740,7 +9725,6 @@ def Detrending_IterativeCosine2(timeOrig, fluxOrig, timeCut, fluxCut,
                     fluxCosineFiltered = np.array([])
                     trendCosineFiltered = np.array([])
                     sectorDataPoints = int(len(timeFinal) / numSectors) if len(timeFinal) else 0
-                    print('second')
 
                     for ii in range(0, numSectors):
                         seg_slice = slice(ii * sectorDataPoints, (ii + 1) * sectorDataPoints)
@@ -9760,11 +9744,9 @@ def Detrending_IterativeCosine2(timeOrig, fluxOrig, timeCut, fluxCut,
                         timeCosineFiltered = np.append(timeCosineFiltered, (timeSegment + 55000) * days2sec)
                         fluxCosineFiltered = np.append(fluxCosineFiltered, fluxCosineFilteredSegment)
                         trendCosineFiltered = np.append(trendCosineFiltered, trendCosineFilteredSegment)
-                        print('third')
                 else:
                     sufficientDetrendingReached = True
                     trendCosineFiltered = np.copy(fluxFinal)
-                    print('fourth')
 
             # Record iteration
             listTime.append(timeCosineFiltered)
@@ -10008,9 +9990,6 @@ def Detrending_VariableDuration(timeArray, fluxArray, durationArray, durationArr
 
     # Apply per-bin detrending and copy results into global arrays
     for ii in range(0, numTransitDurationSplits):
-        print('split ii = ' + str(ii))
-        print('Window length = ' + str(windowLengthArray_set[ii]))
-        print(timeArray)
 
         tempTimeDetrended, tempFluxDetrended, trend = DetrendLightCurve(
             timeArray, fluxArray,
@@ -11385,14 +11364,12 @@ def Detrending_IterativeCosine_Test(
                 if (sufficientDetrendingReached == False):
                     cosineFilterWindowLength,fap_1perc,max_power = DoPeriodogram(timeCosineFiltered,fluxCosineFiltered,durationArray,figCosine,True,transitDurationPercentage,transitDurationMultiplier,'progressive',SystemName,DetrendingName,ID, mission,subplotCounter)
                     subplotCounter += 1
-                    print('first')
                     # build cosine-detrended in segments
                     numSectors = 5
                     timeCosineFiltered = np.array([])
                     fluxCosineFiltered = np.array([])
                     trendCosineFiltered = np.array([])
                     sectorDataPoints = int(len(timeOrig)/numSectors)
-                    print('second')
 
                     timeSegment = timeCommonFalsePositivesRemoved[ii*sectorDataPoints:(ii+1)*sectorDataPoints]/days2sec - 55000
                     fluxSegment = fluxCommonFalsePositivesRemoved[ii*sectorDataPoints:(ii+1)*sectorDataPoints]
@@ -11415,10 +11392,9 @@ def Detrending_IterativeCosine_Test(
                     ax.set_ylabel('Flux')
                     ax.set_title('%='+str(transitDurationPercentage)+"Mult="+str(transitDurationMultiplier))
                     ax.legend()
-                    print('third')
                 else:
-                    #sufficientDetrendingReached = True
-                    print('fourth')
+                    sufficientDetrendingReached = True
+                    trendCosineFiltered = np.copy(fluxFinal)
                 fig.savefig(folder_path / f"{SystemName}_{DetrendingName}TT={str(TT_specific[ii]/days2sec-55000)}.png", bbox_inches='tight')
 
     return timeCosineFiltered,fluxCosineFiltered,trendCosineFiltered,listTime,listFlux
