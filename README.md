@@ -11,7 +11,7 @@ Motivated by this apparent “missing population,” Stanley was developed to sy
 
 For a detailed description of the original Kepler-based implementation of the Stanley pipeline and its application to the known circumbinary planet sample, see:
 
-Martin & Fabrycky (2021), “A search for additional circumbinary planets in Kepler eclipsing binaries”
+Martin & Fabrycky (2021), “Searching for Small Circumbinary Planets I. The STANLEY Automated Algorithm and No New Planets in Existing Systems”
 https://arxiv.org/abs/2101.03186
 # Stanley Pipeline
 
