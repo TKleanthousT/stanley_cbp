@@ -5,7 +5,7 @@ In addition to this reduced transit count, circumbinary transits are fundamental
 
 The combined impact of these effects is illustrated in the figure below, which places the known circumbinary planet population in orbital period–radius space alongside the broader single-star exoplanet population. While small planets (roughly Earth–to–Neptune sized) dominate the single-star population, there is a striking absence of small circumbinary planets. This is particularly puzzling given that there is no clear theoretical reason to expect planet formation in circumbinary disks to strongly suppress the production of small planets. Instead, the observed deficit is widely interpreted as a detection bias, driven by the combination of longer orbital periods, fewer transits, and highly variable transit timing and duration.
 
-![Circumbinary planets occupy long-period parameter space and show a deficit of small planets compared to single-star systems](docs/figures/cbp_period_radius.png)
+![Circumbinary planets occupy long-period parameter space and show a deficit of small planets compared to single-star systems](docs/figures/cbp_period_radius.pdf)
 
 Motivated by this apparent “missing population,” Stanley was developed to systematically search for small circumbinary planets that are likely being missed by conventional methods. By coupling robust eclipsing-binary characterization with dynamically informed, variable-duration, non-periodic transit searches, Stanley remains sensitive to precisely the class of signals that evade traditional single-star pipelines. To date, Stanley is the primary automated framework designed to conduct large-scale searches for small circumbinary planets in space-based photometric data, enabling both targeted discoveries and demographic studies of this unexplored population.
 
@@ -13,6 +13,7 @@ For a detailed description of the original Kepler-based implementation of the St
 
 Martin & Fabrycky (2021), “Searching for Small Circumbinary Planets I. The STANLEY Automated Algorithm and No New Planets in Existing Systems”
 https://arxiv.org/abs/2101.03186
+
 # Stanley Pipeline
 
 **Stanley** is a research pipeline for detecting, modeling, and analyzing **eclipsing binaries** and potential **circumbinary planets (CBPs)** in space-based photometric data. It was originally developed for the **Kepler** CBP sample and has since been extended to large-scale searches in **TESS** light curves. In circumbinary systems, planetary transits do **not** occur at regular intervals and transit durations vary significantly due to the orbital motion of both stars around the barycenter. As a result, conventional single-star transit search algorithms perform poorly. **Stanley** implements methods specifically optimized for the **variable-timing and variable-duration** transit signatures unique to circumbinary planets.
