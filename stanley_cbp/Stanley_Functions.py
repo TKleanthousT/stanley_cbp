@@ -9641,9 +9641,6 @@ def Detrending_IterativeCosine(timeArray, fluxArray, duration_array,
                         trendCosineFiltered = np.append(trendCosineFiltered,trendCosineFilteredSegment)
                 else:
                     sufficientDetrendingReached = True
-			
-				#if (transitDurationPercentage == 'max' and transitDurationMultiplier == 3):
-					# Just done the first round of detrending. if we are to scale transits then we need to do it now
 				
 	# Save the figure
     folder_name = "../LightCurves/Figures/" + DetrendingName
