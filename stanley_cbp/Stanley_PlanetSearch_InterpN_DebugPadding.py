@@ -45,32 +45,16 @@ Runtime Behavior / Notes:
         * -29 pads unused θ/ω slots to a consistent rectangular tensor.
     - This script must complete sector 1 to produce simInfo and searchParameters_array for analysis.
 """
-
-import os
-import sys
-import io
 import time
 import importlib
-import rebound
-import math
-import timeit
 import datetime
 import matplotlib
 matplotlib.use("Agg")  # headless-safe everywhere
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib.colors import ListedColormap, LinearSegmentedColormap
-from matplotlib.patches import Circle, Wedge, Polygon
-from matplotlib.collections import PatchCollection
-from collections import OrderedDict
-from mpl_toolkits.mplot3d import Axes3D
-from scipy import optimize
 import pylab, argparse, warnings
 import multiprocessing
 from functools import partial
-from pathlib import Path
-from tqdm.auto import tqdm
 
 # Package-relative import fallback
 try:
@@ -381,12 +365,6 @@ def Stanley_FindPlanets(
     # Index iterator (exclude final 2 dims)
     _dbg("Generating index_search iterator...")
     index_search = np.ndindex(np.shape(searchResults)[0:-2])
-
-    # notebook-only progress bar (local)
-    if not onCluster:
-        total_outer = int(np.product(np.shape(searchResults)[0:-2]))
-        index_search = tqdm(index_search, total=total_outer, desc=f"Stanley search (sector {currentSector}/{totalSectors})")
-
     _dbg("index_search ready.")
 
     total_outer = int(np.product(np.shape(searchResults)[0:-2]))
@@ -473,18 +451,16 @@ def Stanley_FindPlanets(
                     compTime[np.sum(compTime > 0)] = specificSimEndTime - specificSimStartTime
                     maxCompTime = np.mean(compTime[compTime > 0]) * 100
 
-                # progress
-                if onCluster:
-                    simElapsedTime = AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster)
-                else:
-                    simElapsedTime = time.time() - simStartTime
+                # progress (NOTEBOOK ONLY)
+                if not onCluster:
+                    AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster=False)
 
                 if simCount % 50 == 0:
                     _dbg(f"Progress: simCount={simCount}/{totalParams}, elapsed={round((time.time()-simStartTime)/60,2)} min")
 
             # If loop ended before final theta due to step > 1, fill remainder by direct sims
-            if len(thetas) > 0 and 'ii' in locals() and ii < len(thetas) - 1:
-                for kk in range(ii, len(thetas)):
+            if len(thetas) > 0 and N_interp > 1 and ii < len(thetas) - 1:
+                for kk in range(ii + 1, len(thetas)):
                     theta = thetas[kk]
                     specificSimStartTime = time.time()
                     this_z = (mA_search[index[0]], mB_search[index[1]], Pbin_search[index[2]], ebin_search[index[3]],
@@ -504,10 +480,9 @@ def Stanley_FindPlanets(
                         maxCompTime = np.mean(compTime[compTime > 0]) * 100
 
                     simCount += 1
-                    if onCluster:
-                        simElapsedTime = AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster)
-                    else:
-                        simElapsedTime = time.time() - simStartTime
+                    # progress (NOTEBOOK ONLY)
+                    if not onCluster:
+                        AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster=False)
 
                     if simCount % 50 == 0:
                         _dbg(f"Progress: simCount={simCount}/{totalParams}, elapsed={round((time.time()-simStartTime)/60,2)} min")
@@ -516,10 +491,9 @@ def Stanley_FindPlanets(
             for ii2 in range(len(thetas), length_longest_theta_grid):
                 searchResults[index][ii2] = -29
                 simCount += 1
-                if onCluster:
-                    simElapsedTime = AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster)
-                else:
-                    simElapsedTime = time.time() - simStartTime
+                # progress (NOTEBOOK ONLY)
+                if not onCluster:
+                    AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster=False)
 
                 if simCount % 50 == 0:
                     _dbg(f"Progress: simCount={simCount}/{totalParams}, elapsed={round((time.time()-simStartTime)/60,2)} min")
@@ -528,18 +502,19 @@ def Stanley_FindPlanets(
         else:
             searchResults[index] = -29
             simCount += length_longest_theta_grid
-            if onCluster:
-                simElapsedTime = AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster)
-            else:
-                simElapsedTime = time.time() - simStartTime
-
+            # progress (NOTEBOOK ONLY)
+            if not onCluster:
+                AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster=False)
 
     # SAVE OUTPUTS (LEGACY FILENAMES)
     _dbg("Main loop complete, saving outputs...")
 
-    # Force a final 100% progress line (progress-only, no functionality change)
-    if onCluster:
-        simElapsedTime = AC.Progress_Bar(totalParams, totalParams, simStartTime, onCluster)
+    # final "elapsed time" capture (no printing on cluster)
+    simElapsedTime = time.time() - simStartTime
+    if not onCluster:
+        AC.Progress_Bar(totalParams, totalParams, simStartTime, onCluster=False)
+        print()  # newline so the prompt isn't stuck on the \r line
+
 
     out_arr_base = _p_outputs(SearchName, f"{mission}_{ID}_searchResults_array_{totalSectors}_{currentSector}")
     np.save(str(out_arr_base), searchResults)
