@@ -7554,8 +7554,8 @@ def BIC(timeData, fluxData, fluxErrData, gaussianParams, straightParams, tanhPar
         secondaryFound = True
         best_model = 'Tanh'
         sec_pos = tanhParams[2]
-        swidth = max(0.005, tanhParams[1] * 1.75)
-        swidth_ecc = tanhParams[1] * 1.25
+        swidth = max(0.005, tanhParams[1])
+        swidth_ecc = tanhParams[1]
         sdepth = tanhParams[0]
         print("BIC tie between Gaussian and Tanh — defaulting to Tanh model.")
         return (secondaryFound, best_model,
@@ -7565,27 +7565,27 @@ def BIC(timeData, fluxData, fluxErrData, gaussianParams, straightParams, tanhPar
     # 3. otherwise continue with original logic
     if bic_gaussianOG < bic_straight and bic_gaussianOG < bic_tanh:
         secondaryFound = True
-        if (gaussianParams[1] * 4) > 0.09 and (tanhParams[1] * 1.25) < 0.09:
+        if (gaussianParams[1] * 2.35) > 0.09 and (tanhParams[1]) < 0.09:
             best_model = 'Tanh'
             sec_pos = tanhParams[2]
-            swidth = tanhParams[1] * 1.75
-            swidth_ecc = tanhParams[1] * 1.25
+            swidth = tanhParams[1]
+            swidth_ecc = tanhParams[1]
             sdepth = tanhParams[0]
             print("Gaussian width is unusually large, reverting to Tanh model.")
-        elif (gaussianParams[1] * 4) > 0.09 and (tanhParams[1] * 1.25) > 0.09:
+        elif (gaussianParams[1] * 2.35) > 0.09 and (tanhParams[1]) > 0.09:
             secondaryFound = False
             best_model = 'Straight Line'
             sec_pos = swidth = swidth_ecc = sdepth = np.nan
             print("Straight line model is preferred due to large Gaussian and Tanh widths.")
-        elif (gaussianParams[1] * 4) < 0.001 and (tanhParams[1] * 1.25) > 0.00001:
+        elif (gaussianParams[1] * 2.35) < 0.001 and (tanhParams[1]) > 0.00001:
             secondaryFound = True
             best_model = 'Tanh'
             sec_pos = tanhParams[2]
-            swidth = max(0.005, tanhParams[1] * 1.75)
-            swidth_ecc = tanhParams[1] * 1.25
+            swidth = max(0.005, tanhParams[1])
+            swidth_ecc = tanhParams[1]
             sdepth = tanhParams[0]
             print("Gaussian width is unusually small, reverting to Tanh model.")
-        elif (gaussianParams[1] * 4) < 0.001 and (tanhParams[1] * 1.25) < 0.00001:
+        elif (gaussianParams[1] * 2.35) < 0.001 and (tanhParams[1]) < 0.00001:
             secondaryFound = False
             best_model = 'Straight Line'
             sec_pos = swidth = swidth_ecc = sdepth = np.nan
@@ -7593,8 +7593,8 @@ def BIC(timeData, fluxData, fluxErrData, gaussianParams, straightParams, tanhPar
         else:
             best_model = 'Gaussian'
             sec_pos = gaussianParams[2]
-            swidth = gaussianParams[1] * 5
-            swidth_ecc = gaussianParams[1] * 4
+            swidth = gaussianParams[1] * 2.35
+            swidth_ecc = gaussianParams[1] * 2.35
             sdepth = gaussianParams[0]
             print("Gaussian model is preferred.")
     elif bic_straight < bic_gaussianOG and bic_straight < bic_tanh:
@@ -7603,7 +7603,7 @@ def BIC(timeData, fluxData, fluxErrData, gaussianParams, straightParams, tanhPar
         sec_pos = swidth = swidth_ecc = sdepth = np.nan
         print("Straight line model is preferred.")
     elif bic_tanh < bic_gaussianOG and bic_tanh < bic_straight:
-        if (tanhParams[1] * 1.25) > 1.0 or (tanhParams[1] * 1.25) < 0.00001:
+        if (tanhParams[1]) > 1.0 or (tanhParams[1]) < 0.00001:
             secondaryFound = False
             best_model = 'Straight Line'
             sec_pos = swidth = swidth_ecc = sdepth = np.nan
@@ -7612,8 +7612,8 @@ def BIC(timeData, fluxData, fluxErrData, gaussianParams, straightParams, tanhPar
             secondaryFound = True
             best_model = 'Tanh'
             sec_pos = tanhParams[2]
-            swidth = max(0.005, tanhParams[1] * 1.75)
-            swidth_ecc = tanhParams[1] * 1.25
+            swidth = max(0.005, tanhParams[1])
+            swidth_ecc = tanhParams[1]
             sdepth = tanhParams[0]
             print("Tanh model is preferred.")
 
