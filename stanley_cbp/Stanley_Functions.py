@@ -15,6 +15,9 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages   # >>> NEW
 from collections import namedtuple
 from astroquery.mast import Catalogs
+from IPython.display import clear_output
+import sys
+import time as TIME
 
 # PACKAGE / REPO DUAL-MODE INTERNAL IMPORTS
 try:
@@ -12505,7 +12508,9 @@ def Progress_Bar(simCount, totalParams, simStartTime, onCluster):
     '''
     Functionality:
         Print a compact ETA/progress readout for long simulations when running
-        locally. Returns elapsed wall time regardless of environment.
+        locally. In terminal environments this updates a single line; in Jupyter
+        notebooks the output cell is refreshed to show progress. Returns elapsed
+        wall time regardless of environment.
 
     Arguments:
         simCount (int): Zero-based index of current simulation.
@@ -12517,20 +12522,27 @@ def Progress_Bar(simCount, totalParams, simStartTime, onCluster):
         float:
             simElapsedTime (seconds) since simStartTime.
     '''
-    simPercentageComplete = 100.*(simCount+1)/(totalParams)
+    simPercentageComplete = 100. * (simCount + 1) / totalParams
     simElapsedTime = TIME.time() - simStartTime
-    simTotalTime = simElapsedTime/(simPercentageComplete/100.)
+    simTotalTime = simElapsedTime / (simPercentageComplete / 100.)
     remainingTime = simTotalTime - simElapsedTime
-    if (onCluster == False):
-        if (remainingTime < 60):
-            sys.stdout.write("Remaining time (sec): %.2f, %d%% completed   \r" % (remainingTime,simPercentageComplete))
-        elif (remainingTime > 60 and remainingTime < 3600):
-            sys.stdout.write("Remaining time (min): %.2f, %d%% completed   \r" % (remainingTime/60.,simPercentageComplete))
-        elif (remainingTime > 3600 and remainingTime < 86400):
-            sys.stdout.write("Remaining time (hrs): %.2f, %d%% completed   \r" % (remainingTime/3600.,simPercentageComplete))
-        elif (remainingTime > 86400):
-            sys.stdout.write("Remaining time (days): %.2f, %d%% completed   \r" % (remainingTime/86400.,simPercentageComplete))
-        sys.stdout.flush()
+
+    if onCluster:
+        return simElapsedTime
+
+    if _in_notebook():
+        clear_output(wait=True)
+
+    if remainingTime < 60:
+        msg = f"Remaining time (sec): {remainingTime:.2f}, {int(simPercentageComplete)}% completed"
+    elif remainingTime < 3600:
+        msg = f"Remaining time (min): {remainingTime/60:.2f}, {int(simPercentageComplete)}% completed"
+    elif remainingTime < 86400:
+        msg = f"Remaining time (hrs): {remainingTime/3600:.2f}, {int(simPercentageComplete)}% completed"
+    else:
+        msg = f"Remaining time (days): {remainingTime/86400:.2f}, {int(simPercentageComplete)}% completed"
+
+    print(msg)
     return simElapsedTime
 
 def log_info(filename, info, do_logging=False):
