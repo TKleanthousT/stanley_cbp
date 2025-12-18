@@ -4788,16 +4788,6 @@ def modelEclipse3(
     except Exception:
         pass
 
-    print("\n=== [DEBUG] Gaussian Fit Arguments ===")
-    print(f"phaseTime shape: {phaseTime.shape}")
-    print(f"y shape: {y.shape}")
-    print(f"ye shape: {None if ye is None else ye.shape}")
-    print(f"Model: gaussianModel_local")
-    print(f"p0: {[pdepthGuess, w0_gauss, primLocGuess]}")
-    print(f"bounds: {bounds}")
-    print(f"retry_bin_width: {retry_bin_width}")
-    print(f"do_once=True, gtol=1e-8")
-
     popt_g, used_bin_g, xg, yg, yeg = _fit_with_optional_binning_l(
         phaseTime, y, ye,
         gaussianModel_local,
@@ -12504,47 +12494,6 @@ def Do_Interpolation_N(last_transit_times, last_transit_durations,
     return [predicted_sigma_solution]
 
  
-def Progress_Bar(simCount, totalParams, simStartTime, onCluster):
-    '''
-    Functionality:
-        Print a compact ETA/progress readout for long simulations when running
-        locally. In terminal environments this updates a single line; in Jupyter
-        notebooks the output cell is refreshed to show progress. Returns elapsed
-        wall time regardless of environment.
-
-    Arguments:
-        simCount (int): Zero-based index of current simulation.
-        totalParams (int): Total number of simulations/tasks.
-        simStartTime (float): Epoch timestamp from TIME.time() at start.
-        onCluster (bool): If True, suppresses console output.
-
-    Returns:
-        float:
-            simElapsedTime (seconds) since simStartTime.
-    '''
-    simPercentageComplete = 100. * (simCount + 1) / totalParams
-    simElapsedTime = TIME.time() - simStartTime
-    simTotalTime = simElapsedTime / (simPercentageComplete / 100.)
-    remainingTime = simTotalTime - simElapsedTime
-
-    if onCluster:
-        return simElapsedTime
-
-    if _in_notebook():
-        clear_output(wait=True)
-
-    if remainingTime < 60:
-        msg = f"Remaining time (sec): {remainingTime:.2f}, {int(simPercentageComplete)}% completed"
-    elif remainingTime < 3600:
-        msg = f"Remaining time (min): {remainingTime/60:.2f}, {int(simPercentageComplete)}% completed"
-    elif remainingTime < 86400:
-        msg = f"Remaining time (hrs): {remainingTime/3600:.2f}, {int(simPercentageComplete)}% completed"
-    else:
-        msg = f"Remaining time (days): {remainingTime/86400:.2f}, {int(simPercentageComplete)}% completed"
-
-    print(msg)
-    return simElapsedTime
-
 def log_info(filename, info, do_logging=False):
     '''
     Functionality:

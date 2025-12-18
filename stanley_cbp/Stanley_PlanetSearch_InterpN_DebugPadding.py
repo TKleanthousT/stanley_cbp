@@ -451,10 +451,6 @@ def Stanley_FindPlanets(
                     compTime[np.sum(compTime > 0)] = specificSimEndTime - specificSimStartTime
                     maxCompTime = np.mean(compTime[compTime > 0]) * 100
 
-                # progress (NOTEBOOK ONLY)
-                if not onCluster:
-                    AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster=False)
-
                 if simCount % 50 == 0:
                     _dbg(f"Progress: simCount={simCount}/{totalParams}, elapsed={round((time.time()-simStartTime)/60,2)} min")
 
@@ -480,10 +476,6 @@ def Stanley_FindPlanets(
                         maxCompTime = np.mean(compTime[compTime > 0]) * 100
 
                     simCount += 1
-                    # progress (NOTEBOOK ONLY)
-                    if not onCluster:
-                        AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster=False)
-
                     if simCount % 50 == 0:
                         _dbg(f"Progress: simCount={simCount}/{totalParams}, elapsed={round((time.time()-simStartTime)/60,2)} min")
 
@@ -491,10 +483,6 @@ def Stanley_FindPlanets(
             for ii2 in range(len(thetas), length_longest_theta_grid):
                 searchResults[index][ii2] = -29
                 simCount += 1
-                # progress (NOTEBOOK ONLY)
-                if not onCluster:
-                    AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster=False)
-
                 if simCount % 50 == 0:
                     _dbg(f"Progress: simCount={simCount}/{totalParams}, elapsed={round((time.time()-simStartTime)/60,2)} min")
 
@@ -502,19 +490,13 @@ def Stanley_FindPlanets(
         else:
             searchResults[index] = -29
             simCount += length_longest_theta_grid
-            # progress (NOTEBOOK ONLY)
-            if not onCluster:
-                AC.Progress_Bar(simCount, totalParams, simStartTime, onCluster=False)
+
 
     # SAVE OUTPUTS (LEGACY FILENAMES)
     _dbg("Main loop complete, saving outputs...")
 
     # final "elapsed time" capture (no printing on cluster)
     simElapsedTime = time.time() - simStartTime
-    if not onCluster:
-        AC.Progress_Bar(totalParams, totalParams, simStartTime, onCluster=False)
-        print()  # newline so the prompt isn't stuck on the \r line
-
 
     out_arr_base = _p_outputs(SearchName, f"{mission}_{ID}_searchResults_array_{totalSectors}_{currentSector}")
     np.save(str(out_arr_base), searchResults)
