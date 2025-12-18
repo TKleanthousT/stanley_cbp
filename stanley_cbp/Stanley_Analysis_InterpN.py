@@ -2,7 +2,7 @@
 
 """
 Functionality:
-    Aggregates Stanley circumbinary search results, constructs a 1D SDE over planet period
+    Aggregates STANLEY circumbinary search results, constructs a 1D SDE over planet period
     (marginalized over e, ω, and θ_p), selects the best-fit model, reconstructs transit times
     and durations, makes TTV/TDV plots, and writes a concise summary plus helper files.
 
@@ -82,7 +82,7 @@ def runAnalysisModule(
 ):
     """
     Functionality:
-        Aggregates Stanley circumbinary search results, constructs a 1D SDE over planet period
+        Aggregates STANLEY circumbinary search results, constructs a 1D SDE over planet period
         (marginalized over e, ω, and θ_p), selects the best-fit model, reconstructs transit times
         and durations, makes TTV/TDV plots, and writes a concise summary plus helper files.
 

@@ -1,11 +1,11 @@
 # Architecture & Data Layout
 
-This page describes how the Stanley package is organized and where it reads and writes data on disk. The goal is a clean, predictable architecture that works identically in:
+This page describes how the STANLEY package is organized and where it reads and writes data on disk. The goal is a clean, predictable architecture that works identically in:
 
 - local **Jupyter notebook runs**
 - **cluster SLURM runs**
 
-Stanley always operates inside a single *base directory*, and all user-generated output lives underneath it.
+STANLEY always operates inside a single *base directory*, and all user-generated output lives underneath it.
 
 ---
 
@@ -85,12 +85,12 @@ Static mission catalogs are packaged inside the wheel, under the installed packa
 
 ## Data Layout on Disk
 
-Stanley runs entirely inside a **base directory**:
+STANLEY runs entirely inside a **base directory**:
 
 - In **local Jupyter runs**, `base_dir()` resolves to the folder that contains your notebook.
 - In **cluster runs**, the SLURM script sets an environment variable (for example `STANLEY_WORKDIR`) and `base_dir()` resolves to that directory.
 
-Under this base directory, Stanley creates a consistent data layout:
+Under this base directory, STANLEY creates a consistent data layout:
 
 - `LightCurves/`  
   Raw, detrended, and processed light curves.
@@ -114,7 +114,7 @@ This layout is the same whether you are working locally or on a cluster.
 If your notebook lives in some folder (for example a `Tutorials/` directory), then:
 
 - `base_dir()` resolves to that folder.
-- Stanley writes:
+- STANLEY writes:
 
   - `LightCurves/`
   - `PlanetSearchOutput/`

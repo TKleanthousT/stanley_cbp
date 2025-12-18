@@ -1,5 +1,5 @@
 """
-Static database files packaged with Stanley.
+Static database files packaged with STANLEY.
 
 This directory contains CSV tables used throughout the pipeline, including:
 - exoplanet archive samples

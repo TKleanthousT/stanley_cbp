@@ -1,4 +1,4 @@
-# Physical and astronomical constants used throughout Stanley
+# Physical and astronomical constants used throughout STANLEY
 # (Units remain exactly the same as the original version.)
 
 speedOfLight = 299792458.0      # m/s

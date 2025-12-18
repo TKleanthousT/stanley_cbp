@@ -2,7 +2,7 @@
 
 """
 Functionality:
-    Runs the Stanley circumbinary planet **search** by forward-modeling an N-body grid
+    Runs the STANLEY circumbinary planet **search** by forward-modeling an N-body grid
     over (e_p, ω_p, P_p, θ_p), building transit masks, and recording the per-grid
     significance (σ). The period–theta grid is adaptive; the (e, ω) grid samples full
     0–360° at each eccentricity level. This script writes all sector outputs needed

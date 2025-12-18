@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Lightweight N-body transit timing utilities for Stanley.
+Lightweight N-body transit timing utilities for STANLEY.
 - TransitTiming_nbody_lite: find mid-transit times/durations from a REBOUND Simulation.
 - TT_to_TTV: convert transit times to TTVs by fitting and removing a linear ephemeris.
 

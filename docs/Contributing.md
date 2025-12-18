@@ -1,4 +1,4 @@
-# Contributing to Stanley
+# Contributing to STANLEY
 
 Thanks for your interest in contributing!  
 This project is actively evolving and contributions are welcome.

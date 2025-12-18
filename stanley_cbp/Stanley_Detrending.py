@@ -5,7 +5,7 @@
 #########
 #########                    STANLEY DETRENDING CODE (CLUSTER VERSION)
 #########
-#########                    This is the first part of the Stanley automated circumbinary search code.
+#########                    This is the first part of the STANLEY automated circumbinary search code.
 #########                    You feed the code a KIC/TIC and it will download the data, get the relevant
 #########                    parameters from Villanova/Windemuth catalogs, remove eclipses and detrend
 #########                    the data. The detrending is designed to remove eclipsing-binary variability
@@ -17,7 +17,7 @@
 
 """
 Functionality:
-    Over-arching detrending pipeline for eclipsing-binary light curves used by the Stanley
+    Over-arching detrending pipeline for eclipsing-binary light curves used by the STANLEY
     circumbinary planet search. Given a target identifier (KIC or TIC) and a run label,
     it loads or downloads photometry, removes eclipses, applies several detrending stages
     (iterative cosine, optional gap plug/remove, variable-duration biweight, kink removal,
@@ -137,7 +137,7 @@ def runDetrendingModule(
     gap_threshold: int = 5*120
 ):
     """
-    Run the Stanley detrending pipeline end-to-end for a single target.
+    Run the STANLEY detrending pipeline end-to-end for a single target.
     """
 
     # Ensure LightCurves/ exists

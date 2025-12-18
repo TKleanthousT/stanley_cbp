@@ -1,5 +1,5 @@
 # Installation
-This page explains how to install the Stanley pipeline in a clean and reliable way. The instructions assume basic familiarity with Python environments but do not require advanced setup.
+This page explains how to install the STANLEY pipeline in a clean and reliable way. The instructions assume basic familiarity with Python environments but do not require advanced setup.
 
 # Requirements
 - Python ≥ 3.9
@@ -30,7 +30,7 @@ or, for cluster usage:
 Once the environment is active, install STANLEY using one of the methods above.
 
 # Verifying the Installation
-Check that Stanley imports correctly: `python -c "import stanley_cbp; print(stanley_cbp.version)"`
+Check that STANLEY imports correctly: `python -c "import stanley_cbp; print(stanley_cbp.version)"`
 If this prints a version number without errors, the installation succeeded.
 
 # Optional: Using Jupyter Notebooks
@@ -44,7 +44,7 @@ Then launch Jupyter from inside the Tutorials directory: jupyter lab or jupyter 
 No external data downloads are required.
 
 # What You Need to Prepare
-Solely the environment. When you run a notebook or script from the Tutorials directory, Stanley automatically creates and manages all runtime folders. The same can be said for cluster usage so long as you set the `RUN_ROOT` within the bash script. You can expect to see your data written to:
+Solely the environment. When you run a notebook or script from the Tutorials directory, STANLEY automatically creates and manages all runtime folders. The same can be said for cluster usage so long as you set the `RUN_ROOT` within the bash script. You can expect to see your data written to:
 
 - `LightCurves/`
 - `PlanetSearchOutput/`
