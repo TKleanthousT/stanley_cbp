@@ -7525,7 +7525,7 @@ def BIC(timeData, fluxData, fluxErrData, gaussianParams, straightParams, tanhPar
     bic_tanh = chi_squared_tanh + k_tanh * np.log(max(1, ntanh))
 
     print(f"BIC Gaussian: {bic_gaussianOG}, BIC Straight Line: {bic_straight}, BIC Tanh: {bic_tanh}")
-    print(f"secondary width: {tanhParams[1] * 1.25}")
+    print(f"secondary width: {tanhParams[1]}")
 
     # tie logic
     bics = {'Gaussian': bic_gaussianOG, 'Straight': bic_straight, 'Tanh': bic_tanh}
