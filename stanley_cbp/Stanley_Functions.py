@@ -320,7 +320,7 @@ def CreateReboundSim(Pbin,ecc,omega,mA,mB,RA,RB,bjd0,startTime):
 	return sim
 
 
-def LoadData(mission,ID,DetrendingName, remove_eclipses = True, use_saved_data = False, detrending_fluxType="pdcsap"):
+def LoadData(mission,ID,DetrendingName, remove_eclipses = True, use_saved_data = False, fluxType="pdcsap"):
 	'''
 	Functionality:
 		Dispatch data-loading based on mission ('TIC' or 'KIC'), returning light curves and parameters.
@@ -336,10 +336,10 @@ def LoadData(mission,ID,DetrendingName, remove_eclipses = True, use_saved_data =
 	'''
 	if mission == "TIC":
 		# Route to TIC loader (not shown in this snippet)
-		return LoadDataTIC(mission,ID,DetrendingName, remove_eclipses, use_saved_data, flux_type=detrending_fluxType)
+		return LoadDataTIC(mission,ID,DetrendingName, remove_eclipses, use_saved_data, flux_type=fluxType)
 	elif mission == "KIC":
 		# Route to KIC loader (defined below)
-		return LoadDataKIC(mission,ID,DetrendingName,remove_eclipses,use_saved_data, flux_type=detrending_fluxType)
+		return LoadDataKIC(mission,ID,DetrendingName,remove_eclipses,use_saved_data, flux_type=fluxType)
 	else:
 		# Defensive: only KIC/TIC supported
 		raise Exception(f"Mission {mission} not supported (not KIC or TIC)")
