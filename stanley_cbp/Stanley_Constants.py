@@ -21,6 +21,11 @@ G_Nm2pkg2 = 6.67384e-11         # N·m²/kg²
 # ---- Backward-compatibility aliases (legacy UPPERCASE names) ----
 # Keep these AFTER the lowercase names are defined.
 try:
+    AU2M
+except NameError:
+    AU2M = au2m
+    
+try:
     YEARS2SEC
 except NameError:
     YEARS2SEC = years2sec

@@ -7816,7 +7816,7 @@ def estimate_eclipse_width_phase_circular(Ra, Rb, a_AU):
     '''
     if a_AU is None or not np.isfinite(a_AU) or a_AU <= 0:
         return np.nan
-    a_m = a_AU * AU2M  # convert semi-major axis to meters
+    a_m = a_AU * au2m  # convert semi-major axis to meters
     swidth = (Ra + Rb) / (2 * np.pi * a_m)
     return swidth
 
@@ -8353,7 +8353,7 @@ def plotPositionsOverTime(positions, time, units):
     plotPoints = 1  # 0 = plot lines, 1 = plot points (good for very long sims)
 
     if (units == "natural"):
-        lengthScale = 1/AU2M
+        lengthScale = 1/au2m
     else:
         lengthScale = 1
 
@@ -8369,30 +8369,30 @@ def plotPositionsOverTime(positions, time, units):
 
         plt.subplot(2, 2, 1)  # top left
         if (plotPoints == 1):
-            plt.scatter(x_pos/AU2M/lengthScale, z_pos/AU2M/lengthScale, c=colourArray[ii])
+            plt.scatter(x_pos/au2m/lengthScale, z_pos/au2m/lengthScale, c=colourArray[ii])
         else:
-            plt.plot(x_pos/AU2M/lengthScale, z_pos/AU2M/lengthScale, c=colourArray[ii])
-        plt.scatter(x_pos[0]/AU2M/lengthScale, z_pos[0]/AU2M/lengthScale, marker="*", s=50, c=colourArray[ii])
+            plt.plot(x_pos/au2m/lengthScale, z_pos/au2m/lengthScale, c=colourArray[ii])
+        plt.scatter(x_pos[0]/au2m/lengthScale, z_pos[0]/au2m/lengthScale, marker="*", s=50, c=colourArray[ii])
         plt.ylabel("Z (AU)")
         plt.xlabel("X (AU)")
         plt.axis("equal")
 
         plt.subplot(2, 2, 3)  # bottom left
         if (plotPoints == 1):
-            plt.scatter(x_pos/AU2M/lengthScale, y_pos/AU2M/lengthScale, c=colourArray[ii])
+            plt.scatter(x_pos/au2m/lengthScale, y_pos/au2m/lengthScale, c=colourArray[ii])
         else:
-            plt.plot(x_pos/AU2M/lengthScale, y_pos/AU2M/lengthScale, c=colourArray[ii])
-        plt.scatter(x_pos[0]/AU2M/lengthScale, y_pos[0]/AU2M/lengthScale, marker="*", s=50, c=colourArray[ii])
+            plt.plot(x_pos/au2m/lengthScale, y_pos/au2m/lengthScale, c=colourArray[ii])
+        plt.scatter(x_pos[0]/au2m/lengthScale, y_pos[0]/au2m/lengthScale, marker="*", s=50, c=colourArray[ii])
         plt.ylabel("Y (AU)")
         plt.xlabel("X (AU)")
         plt.axis("equal")
 
         plt.subplot(2, 2, 4)  # bottom right
         if (plotPoints == 1):
-            plt.scatter(z_pos/AU2M/lengthScale, y_pos/AU2M/lengthScale, c=colourArray[ii])
+            plt.scatter(z_pos/au2m/lengthScale, y_pos/au2m/lengthScale, c=colourArray[ii])
         else:
-            plt.plot(z_pos/AU2M/lengthScale, y_pos/AU2M/lengthScale, c=colourArray[ii])
-        plt.scatter(z_pos[0]/AU2M/lengthScale, y_pos[0]/AU2M/lengthScale, marker="*", s=50, c=colourArray[ii])
+            plt.plot(z_pos/au2m/lengthScale, y_pos/au2m/lengthScale, c=colourArray[ii])
+        plt.scatter(z_pos[0]/au2m/lengthScale, y_pos[0]/au2m/lengthScale, marker="*", s=50, c=colourArray[ii])
         plt.ylabel("Y (AU)")
         plt.xlabel("Z (AU)")
         plt.axis("equal")
@@ -8417,30 +8417,30 @@ def plotPositionsOverTime(positions, time, units):
 
         plt.subplot(2, 2, 1)  # top left
         if (plotPoints == 1):
-            plt.scatter(x_pos_rot/AU2M/lengthScale, z_pos_rot/AU2M/lengthScale, c=colourArray[ii])
+            plt.scatter(x_pos_rot/au2m/lengthScale, z_pos_rot/au2m/lengthScale, c=colourArray[ii])
         else:
-            plt.plot(x_pos_rot/AU2M/lengthScale, z_pos_rot/AU2M/lengthScale, c=colourArray[ii])
-        plt.scatter(x_pos_rot[0]/AU2M/lengthScale, z_pos_rot[0]/AU2M/lengthScale, marker="*", s=50, c=colourArray[ii])
+            plt.plot(x_pos_rot/au2m/lengthScale, z_pos_rot/au2m/lengthScale, c=colourArray[ii])
+        plt.scatter(x_pos_rot[0]/au2m/lengthScale, z_pos_rot[0]/au2m/lengthScale, marker="*", s=50, c=colourArray[ii])
         plt.ylabel("Z (AU)")
         plt.xlabel("X (AU)")
         plt.axis("equal")
 
         plt.subplot(2, 2, 3)  # bottom left
         if (plotPoints == 1):
-            plt.scatter(x_pos_rot/AU2M/lengthScale, y_pos_rot/AU2M/lengthScale, c=colourArray[ii])
+            plt.scatter(x_pos_rot/au2m/lengthScale, y_pos_rot/au2m/lengthScale, c=colourArray[ii])
         else:
-            plt.plot(x_pos_rot/AU2M/lengthScale, y_pos_rot/AU2M/lengthScale, c=colourArray[ii])
-        plt.scatter(x_pos_rot[0]/AU2M/lengthScale, y_pos_rot[0]/AU2M/lengthScale, marker="*", s=50, c=colourArray[ii])
+            plt.plot(x_pos_rot/au2m/lengthScale, y_pos_rot/au2m/lengthScale, c=colourArray[ii])
+        plt.scatter(x_pos_rot[0]/au2m/lengthScale, y_pos_rot[0]/au2m/lengthScale, marker="*", s=50, c=colourArray[ii])
         plt.ylabel("Y (AU)")
         plt.xlabel("X (AU)")
         plt.axis("equal")
 
         plt.subplot(2, 2, 4)  # bottom right
         if (plotPoints == 1):
-            plt.scatter(z_pos_rot/AU2M/lengthScale, y_pos_rot/AU2M/lengthScale, c=colourArray[ii])
+            plt.scatter(z_pos_rot/au2m/lengthScale, y_pos_rot/au2m/lengthScale, c=colourArray[ii])
         else:
-            plt.plot(z_pos_rot/AU2M/lengthScale, y_pos_rot/AU2M/lengthScale, c=colourArray[ii])
-        plt.scatter(z_pos_rot[0]/AU2M/lengthScale, y_pos_rot[0]/AU2M/lengthScale, marker="*", s=50, c=colourArray[ii])
+            plt.plot(z_pos_rot/au2m/lengthScale, y_pos_rot/au2m/lengthScale, c=colourArray[ii])
+        plt.scatter(z_pos_rot[0]/au2m/lengthScale, y_pos_rot[0]/au2m/lengthScale, marker="*", s=50, c=colourArray[ii])
         plt.ylabel("Y (AU)")
         plt.xlabel("Z (AU)")
         plt.axis("equal")
@@ -8482,7 +8482,7 @@ def plotOrbitalElementsOverTime_nbody(orbitalElements, time, units="normal", new
 
     if (units == "natural"):
         timeScale = 2.*np.pi/YEARS2SEC
-        lengthScale = 1./AU2M
+        lengthScale = 1./au2m
     else:
         timeScale = 1.
         lengthScale = 1.
@@ -8534,8 +8534,8 @@ def plotOrbitalElementsOverTime_nbody(orbitalElements, time, units="normal", new
         ax = plt.subplot(337)
         ax.set_ylabel("semi-major axis (AU)")
         ax.set_xlabel(timeAxisLabel)
-        ax.set_title('starting value = ' + str(orbitalElements[0][ii].a/AU2M/lengthScale))
-        plt.plot(timeAxis, np.array([x[ii].a for x in orbitalElements[:]])/AU2M/lengthScale)
+        ax.set_title('starting value = ' + str(orbitalElements[0][ii].a/au2m/lengthScale))
+        plt.plot(timeAxis, np.array([x[ii].a for x in orbitalElements[:]])/au2m/lengthScale)
 
         ax = plt.subplot(338)
         ax.set_ylabel("theta (deg)")
