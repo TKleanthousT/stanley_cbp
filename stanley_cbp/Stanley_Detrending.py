@@ -187,7 +187,7 @@ def runDetrendingModule(
 
     # Load, cut eclipses, and (optionally) reuse cached data
     reboundSim, timeOrig, fluxOrig, timeCutNotBinned, fluxCutNotBinned, orbit_params, stellar_params, sector_times = AC.LoadData(
-        mission, ID, DetrendingName, remove_eclipses=True, use_saved_data=UseSavedData, flux_type=detrending_fluxType
+        mission, ID, DetrendingName, remove_eclipses=True, use_saved_data=UseSavedData, fluxType=detrending_fluxType
     )
 
     # Bin to target cadence
