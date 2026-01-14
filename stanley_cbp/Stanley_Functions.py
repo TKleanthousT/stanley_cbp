@@ -11080,15 +11080,17 @@ def Search_Create1dSDE(sigmaResults_1d, Pp_search, SearchName, mission, ID, base
 
     # Sanitize
     sigma  = np.asarray(sigmaResults_1d, dtype=float).copy()
-    period = np.asarray(Pp_search,      dtype=float).copy()
+    period = np.asarray(Pp_search,dtype=float).copy()
     mask = np.isfinite(sigma) & np.isfinite(period) & (period > 0.0)
-    sigma  = sigma[mask]
+    sigma = sigma[mask]
     period = period[mask]
 
     if sigma.size == 0:
         print("[SDE] No valid points after masking.")
         return -27.0, -27.0
 
+
+    # good up to here - Tess
     # replace sentinels with median of non-sentinels
     valid_for_med = np.isfinite(sigma) & (sigma != -27.0) & (sigma != -29.0)
     if not np.any(valid_for_med):
