@@ -120,6 +120,7 @@ def runDetrendingModule(
     detrending_saveProcessedLightCurve: bool = True,
     detrending_variableDurationXiTest: bool = False,
     detrending_testCosine: bool = False,
+    detrending_fluxType: str = "pdcsap",
     detrending_injectTransits: bool = False,
     injection_param_file: Optional[str] = None,  # ONLY used if detrending_injectTransits=True
 
@@ -186,7 +187,7 @@ def runDetrendingModule(
 
     # Load, cut eclipses, and (optionally) reuse cached data
     reboundSim, timeOrig, fluxOrig, timeCutNotBinned, fluxCutNotBinned, orbit_params, stellar_params, sector_times = AC.LoadData(
-        mission, ID, DetrendingName, remove_eclipses=True, use_saved_data=UseSavedData
+        mission, ID, DetrendingName, remove_eclipses=True, use_saved_data=UseSavedData, flux_type=detrending_fluxType
     )
 
     # Bin to target cadence
@@ -677,6 +678,8 @@ if __name__ == "__main__":
     parser.add_argument("--useSavedData", type=int, help="1 = reuse cached, 0 = fresh", default=0, choices=[0, 1])
 
     # NEW: injection toggles
+    parser.add_argument("--fluxType", type=str, default="pdcsap", choices=["sap", "pdcsap"],
+                        help="Type of flux to use (sap/pdcsap).")
     parser.add_argument("--injectTransits", type=int, default=0, choices=[0, 1],
                         help="Enable transit injections (0/1). If 1, you can provide --injectionParamFile.")
     parser.add_argument("--injectionParamFile", type=str, default="",
@@ -704,6 +707,7 @@ if __name__ == "__main__":
         detrending_variableDurationXiTest=False,
         detrending_testCosine=False,
 
+        detrending_fluxType=args.fluxType,
         detrending_injectTransits=bool(args.injectTransits),
         injection_param_file=(args.injectionParamFile or None),
 

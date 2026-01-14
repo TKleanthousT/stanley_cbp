@@ -320,7 +320,7 @@ def CreateReboundSim(Pbin,ecc,omega,mA,mB,RA,RB,bjd0,startTime):
 	return sim
 
 
-def LoadData(mission,ID,DetrendingName, remove_eclipses = True, use_saved_data = False):
+def LoadData(mission,ID,DetrendingName, remove_eclipses = True, use_saved_data = False, detrending_fluxType="pdcsap"):
 	'''
 	Functionality:
 		Dispatch data-loading based on mission ('TIC' or 'KIC'), returning light curves and parameters.
@@ -336,17 +336,17 @@ def LoadData(mission,ID,DetrendingName, remove_eclipses = True, use_saved_data =
 	'''
 	if mission == "TIC":
 		# Route to TIC loader (not shown in this snippet)
-		return LoadDataTIC(mission,ID,DetrendingName, remove_eclipses, use_saved_data)
+		return LoadDataTIC(mission,ID,DetrendingName, remove_eclipses, use_saved_data, flux_type=detrending_fluxType)
 	elif mission == "KIC":
 		# Route to KIC loader (defined below)
-		return LoadDataKIC(mission,ID,DetrendingName,remove_eclipses,use_saved_data)
+		return LoadDataKIC(mission,ID,DetrendingName,remove_eclipses,use_saved_data, flux_type=detrending_fluxType)
 	else:
 		# Defensive: only KIC/TIC supported
 		raise Exception(f"Mission {mission} not supported (not KIC or TIC)")
 		
 
 
-def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_data=False):
+def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_data=False, flux_type="pdcsap"):
     '''
     Functionality:
         Load and prepare Kepler (KIC) light curve data and system parameters. Attempts to:
@@ -509,8 +509,8 @@ def LoadDataKIC(mission, ID, DetrendingName, remove_eclipses=True, use_saved_dat
 
             # Extract arrays (LightCurve.SAP_FLUX is deprecated after lightkurve 2.0)
             timeOrig = data_lightkurve['time'].value
-            fluxOrig = data_lightkurve['pdcsap_flux'].value
-            fluxErrOrig = data_lightkurve['pdcsap_flux_err'].value
+            fluxOrig = data_lightkurve[f'{flux_type}_flux'].value
+            fluxErrOrig = data_lightkurve[f'{flux_type}_flux_err'].value
 
             # Ensure numpy arrays
             timeOrig = np.array(timeOrig)
@@ -651,6 +651,7 @@ def LoadDataTIC(
     DetrendingName,
     remove_eclipses=True,
     use_saved_data=False,
+    flux_type="pdcsap",
     use_manual_cuts=True,
     interactive_cuts=False,
     cuts_csv=None,
@@ -743,8 +744,8 @@ def LoadDataTIC(
 
         # Extract time (days) and SAP flux/uncertainties
         timeOrig = np.array(data_lightkurve["time"].value, float)         # days
-        fluxOrig = np.array(data_lightkurve["sap_flux"].value, float)
-        fluxErrOrig = np.array(data_lightkurve["sap_flux_err"].value, float)
+        fluxOrig = np.array(data_lightkurve[f"{flux_type}_flux"].value, float)
+        fluxErrOrig = np.array(data_lightkurve[f"{flux_type}_flux_err"].value, float)
 
         # Keep only finite rows to avoid NaN propagation
         finite = np.isfinite(timeOrig) & np.isfinite(fluxOrig) & np.isfinite(fluxErrOrig)

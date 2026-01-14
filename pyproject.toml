@@ -13,6 +13,10 @@ authors = [
   { name = "David Martin",  email = "David.Martin@tufts.edu" },
   { name = "Chanita (Wata) Tubthong", email = "Chanita.Tubthong@tufts.edu" },
   { name = "Tess Kleanthous", email = "Tess.Kleanthous@tufts.edu" }
+  { name = "Noah Stiegler"}
+  { name = "Arielle Weinstein"}
+  { name = "Casey Hartman"}
+  { name = "Isabella Ward"}
 ]
 
 license = { text = "MIT License" }
