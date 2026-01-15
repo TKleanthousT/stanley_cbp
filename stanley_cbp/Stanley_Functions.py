@@ -11055,135 +11055,198 @@ def Search_CreateTransitMask(
         return [sigma_solutionOld]
 
 
-def Search_Create1dSDE(sigmaResults_1d,Pp_search,SearchName,KIC):
-	
-	# is everything unstable? First check 1D
+def Search_Create1dSDE(sigmaResults_1d, Pp_search, SearchName, mission, ID, base_dir=None):
+    '''
+    Functionality:
+        Compute a 1-D Signal Detection Efficiency (SDE) curve from period-scanned
+        detection statistics. Detrends σ(period) with a smooth trend (wotan
+        biweight if available, else robust median smoother), then normalizes the
+        residuals by a guarded standard deviation to produce SDE. Saves summary
+        plots and returns the peak SDE and corresponding period.
 
-	# 1d 'old' (using all eccentricity and omega)
-	if (np.max(sigmaResults_1d) != -27):
-	
-		# STEP 1: create the period axis
+    Arguments:
+        sigmaResults_1d (array-like): Detection metric vs. tested period (σ).
+        Pp_search (array-like): Tested planet periods [seconds], same length.
+        SearchName (str): Output subfolder under ../PlanetSearchOutput/.
+        mission (str): Mission string, used in filenames.
+        ID (str): Target identifier string, used in filenames.
+        base_dir (str|pathlib.Path or None): Root of the repo/data tree. If None, uses CWD.
 
-		# fill in all of the -27 values w ith the median
-		mediansigmaResults_1d  = np.median(sigmaResults_1d [sigmaResults_1d  != -27])
-		sigmaResults_1d [sigmaResults_1d  == -27] = mediansigmaResults_1d 
+    Returns:
+        tuple:
+            SDE_1d_max (float): Maximum SDE value.
+            period_1d_max (float): Period [seconds] at which SDE is maximal.
+    '''
 
-		#periodAxis = np.array([])
-		#for ii in range(0,len(Pp_search)):
-		#	periodAxis = np.append(periodAxis,Pp_search[ii])
-		periodAxis = Pp_search;
-	
-		sigmaResults_1d  = sigmaResults_1d [periodAxis >0 *days2sec]
-		periodAxis = periodAxis[periodAxis > 0*days2sec]
-		
-		# reverse the arrays
-		#periodAxis = periodAxis[::-1]
-		#sigmaResults_1d = sigmaResults_1d[::-1]
+    # Sanitize
+    sigma  = np.asarray(sigmaResults_1d, dtype=float).copy()
+    period = np.asarray(Pp_search, dtype=float).copy()
+    mask = np.isfinite(sigma) & np.isfinite(period) & (period > 0.0)
+    sigma = sigma[mask]
+    period = period[mask]
 
-		# STEP 2: remove the trend using wotan
-		
-		sigmaResults_trendRemoved,sigmaTrend = wotan.flatten(periodAxis/days2sec,sigmaResults_1d,window_length=30,method='biweight',return_trend=True)		
-		SDE_1d = sigmaResults_1d - sigmaTrend # if you just take SDE_1d from wotan.flatten then it'll be normalised	
-		
+    if sigma.size == 0:
+        print("[SDE] No valid points after masking.")
+        return -27.0, -27.0
 
-		
-		# un-reverse the arrays
+    # replace sentinels with median of non-sentinels
+    valid_for_med = np.isfinite(sigma) & (sigma != -27.0) & (sigma != -29.0)
+    if not np.any(valid_for_med):
+        print("Unstable or no valid sigma values to compute median from.")
+        return -27.0, -27.0
+    med = float(np.nanmedian(sigma[valid_for_med]))
+    sigma[(sigma == -27.0) | (sigma == -29.0)] = med
 
-		#periodAxis = periodAxis[::-1]
-		#sigmaResults_1d = sigmaResults_1d[::-1]
-		#SDE_1d = SDE_1d[::-1]
-		#sigmaTrend = sigmaTrend[::-1]
-		
-		# STEP 2: remove the median linear trend
-		
-	
-		# Now similarly calculate the median standard deviation
-		# Note that we use the same splitFrac as above. I guess that's one less thing to try and tune.... 
-		
-		SDE_calculation_type = 'new'
-		
-		if (SDE_calculation_type == 'old'):
+    # tiny jitter if perfectly flat to avoid division by zero later
+    if np.nanstd(sigma) == 0:
+        rng = np.random.default_rng(0)
+        sigma = sigma + 1e-12 * rng.normal(size=sigma.size)
 
-			splitFrac = 0.1 # meaning that we take this fraction of the light curve and calculate the median
-			localSTD = [] 
-			totalIndex = np.linspace(0,len(periodAxis)-1,len(periodAxis)).astype(int)
-			tempNumIndexPoints = (splitFrac * np.max(totalIndex)).astype(int)
-			loopMinIndex = np.ceil(tempNumIndexPoints/2).astype(int)
-			loopMaxIndex = np.floor(np.max(totalIndex) - tempNumIndexPoints/2).astype(int)
-	
-			for ii in range(loopMinIndex,loopMaxIndex):
-				tempIndex = np.linspace(ii - tempNumIndexPoints/2,ii+tempNumIndexPoints/2,tempNumIndexPoints).astype(int)
-				localSTD.append(np.std(sigmaResults_1d[tempIndex]))
-			
-			#print('---- LOCAL GRADIENT ----')
-			#print(localGradient)
-			#print('---- LOCAL CONSTANT ----')
-			#print(localConstant)
-			#print('---- LOCAL STD ----')
-			#print(localSTD)
-	
-			# based on that, scale the SDE_1d
-	
-			SDE_1d = SDE_1d / np.median(localSTD)
-	
-		else:
-			
-			initialSTD = np.std(SDE_1d)
-			outliersRemovedSDE_1d = SDE_1d[np.logical_and(SDE_1d < 2*initialSTD,SDE_1d > -2*initialSTD)]
-			outliersRemovedSTD = np.std(outliersRemovedSDE_1d)
-			SDE_1d = SDE_1d / outliersRemovedSTD
-			
-		
-		# Calculate the max SDE_1d value and the corresponding period
-		SDE_1d_max = np.max(SDE_1d)
-		period_1d_max = periodAxis[np.argmax(SDE_1d)]
-		
-		fig = plt.figure(figsize = (10,10))
-		
-		subplotCounter1 = 1
-		subplotCounter2 = 2
-		title = 'all ecc and omega'
-			
-		# sigma vs period, including the trend removed
-		ax = fig.add_subplot(2,1,1)
-		ax.set_xlabel('Tested planet period (days)')
-		ax.set_ylabel('sigma_1d')
-		ax.set_title(title)
-		ax.plot(periodAxis/days2sec,sigmaResults_1d)
-		ax.plot(periodAxis/days2sec,sigmaTrend,linestyle='--',color='red')
-		plt.show(block=False)
+    # sort
+    order = np.argsort(period)
+    period = period[order]
+    sigma  = sigma[order]
 
-		# SDE vs period, including the peak pointed out
-		ax = fig.add_subplot(2,1,2)
-		ax.set_xlabel('Tested planet period (days)')
-		ax.set_ylabel('SDE_1d')
-		ax.set_title(title)
-		ax.text(0.8,0.9,"Max SDE = " + "{:.3f}".format(SDE_1d_max),horizontalalignment='center',transform=ax.transAxes,fontstyle='italic',fontsize=10)
-		ax.plot(periodAxis/days2sec,SDE_1d)
-		# Plot lines demarcating max and resonant periods
-		#ax.plot(np.array([period_1d_max,period_1d_max])/days2sec,[np.min(SDE_1d),np.max(SDE_1d)],linestyle='--',color='red')
+    # collapse duplicate periods
+    up, idx_start = np.unique(period, return_index=True)
+    if up.size != period.size:
+        sigma_new = np.empty_like(up, dtype=float)
+        for i in range(up.size):
+            a = idx_start[i]
+            b = idx_start[i+1] if i+1 < up.size else period.size
+            sigma_new[i] = np.nanmedian(sigma[a:b])
+        period, sigma = up, sigma_new
 
-		fig.savefig('../PlanetSearchOutput/' + SearchName + "/" + KIC + 'SDE.png', bbox_inches='tight')
-		
-		# Output the plot
-		figPaper = plt.figure(figsize=(18,6))
-		axPaper = figPaper.add_subplot(111)
-		axPaper.plot(periodAxis/days2sec,SDE_1d,color='blue')
-		axPaper.set_xlabel('Planet Period (days)',fontsize=20)
-		axPaper.set_ylabel('Signal Detection Efficiency (SDE)',fontsize=20)
-		axPaper.tick_params(axis="x", labelsize=16)
-		axPaper.tick_params(axis="y", labelsize=16)
-		figPaper.savefig('../PlanetSearchOutput/' + SearchName + "/" + KIC + 'SDEpaper.png', bbox_inches='tight')
+    # detrending window
+    x_days = period / days2sec
+    xspan = float(x_days.max() - x_days.min())
+    dx_med = float(np.nanmedian(np.diff(x_days))) if x_days.size > 1 else np.nan
 
-	else:
-		# Apparently we are very unstable here
-		print('VERY FUCKING UNSTABLE HERE!')
-		SDE_1d_max = -27
-		period_1d_max = -27
-		
-	# return values of the max SDE and the corresponding period
-	
-	return SDE_1d_max,period_1d_max
+    win_days = np.clip(0.15 * xspan, 1.0, 6.0)
+    if np.isfinite(dx_med) and dx_med > 0:
+        win_days = max(win_days, 31 * dx_med)
+
+    trend = None
+    if wotan is not None:
+        try:
+            _, trend = wotan.flatten(
+                x_days, sigma,
+                window_length=float(win_days),
+                method="biweight",
+                return_trend=True,
+                edge_cutoff=0.0,
+                break_tolerance=0.0
+            )
+            if trend is None or not np.any(np.isfinite(trend)):
+                trend = None
+            elif np.any(~np.isfinite(trend)):
+                good = np.isfinite(trend)
+                trend = np.interp(x_days, x_days[good], trend[good]) if np.sum(good) >= 10 else None
+        except Exception as e:
+            print(f"[SDE] wotan failed ({e}); fallback median smoother.")
+            trend = None
+
+    if trend is None:
+        nbins = int(np.clip(x_days.size // 30, 30, 300)) if x_days.size >= 60 else max(10, x_days.size // 3)
+        edges = np.linspace(x_days.min(), x_days.max(), nbins + 1)
+        centers = 0.5 * (edges[:-1] + edges[1:])
+        medvals = np.full(nbins, np.nan)
+
+        j0 = 0
+        for i in range(nbins):
+            a, b = edges[i], edges[i + 1]
+            while j0 < x_days.size and x_days[j0] < a:
+                j0 += 1
+            j = j0
+            vals = []
+            while j < x_days.size and x_days[j] <= b:
+                vals.append(sigma[j])
+                j += 1
+            if vals:
+                medvals[i] = np.median(vals)
+
+        good = np.isfinite(medvals)
+        trend = (
+            np.interp(x_days, centers[good], medvals[good])
+            if np.sum(good) >= 2
+            else np.full_like(sigma, np.nanmedian(sigma))
+        )
+
+    # SDE normalization with guardrails
+    SDE = sigma - trend
+    initialSTD = float(np.std(SDE)) if np.isfinite(np.std(SDE)) else 0.0
+
+    if initialSTD > 0.0:
+        clipped = SDE[(SDE < 2 * initialSTD) & (SDE > -2 * initialSTD)]
+    else:
+        clipped = SDE
+
+    clipSTD = float(np.std(clipped)) if clipped.size else 0.0
+
+    MIN_FRAC   = 0.30
+    FLOOR_FRAC = 0.50
+
+    use_clip = (
+        np.isfinite(clipSTD)
+        and clipSTD > 0.0
+        and clipped.size >= MIN_FRAC * max(1, SDE.size)
+        and initialSTD > 0.0
+        and clipSTD >= FLOOR_FRAC * initialSTD
+    )
+
+    denom = clipSTD if use_clip else (initialSTD if initialSTD > 0.0 else 1.0)
+    SDE /= denom
+
+    print(
+        f"[SDE diag] N={SDE.size} kept={clipped.size} ({clipped.size/max(1,SDE.size):.2%}) "
+        f"initialSTD={initialSTD:.6g} clipSTD={clipSTD:.6g} "
+        f"denom={'clipSTD' if use_clip else ('initialSTD' if initialSTD>0 else '1.0')} "
+        f"max={np.nanmax(SDE):.3f}"
+    )
+
+    SDE_1d_max = float(np.nanmax(SDE))
+    period_1d_max = float(period[np.nanargmax(SDE)])
+
+    print(f"[SDE] Max={SDE_1d_max:.3f} at {period_1d_max/days2sec:.5f} d")
+
+    # plots
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(2, 1, 1)
+    ax.set_xlabel("Tested planet period (days)")
+    ax.set_ylabel("sigma_1d")
+    ax.set_title("all ecc and omega")
+    ax.plot(period / days2sec, sigma)
+    ax.plot(period / days2sec, trend, linestyle="--", color="red")
+
+    ax = fig.add_subplot(2, 1, 2)
+    ax.set_xlabel("Tested planet period (days)")
+    ax.set_ylabel("SDE_1d")
+    ax.set_title("all ecc and omega")
+    ax.text(
+        0.8, 0.9, f"Max SDE = {SDE_1d_max:.3f}",
+        horizontalalignment="center",
+        transform=ax.transAxes,
+        fontstyle="italic",
+        fontsize=10
+    )
+    ax.plot(period / days2sec, SDE)
+
+    base_root = _resolve_base_dir(None)
+    outdir = base_root / "PlanetSearchOutput" / str(SearchName)
+    _ensure_parent(outdir / "dummy.txt")
+    fig.savefig(outdir / f"{ID}_{mission}SDE.png", bbox_inches="tight")
+
+    figPaper = plt.figure(figsize=(18, 6))
+    axPaper = figPaper.add_subplot(111)
+    axPaper.plot(period / days2sec, SDE, color="blue")
+    axPaper.set_xlabel("Planet Period (days)", fontsize=20)
+    axPaper.set_ylabel("Signal Detection Efficiency (SDE)", fontsize=20)
+    axPaper.tick_params(axis="x", labelsize=16)
+    axPaper.tick_params(axis="y", labelsize=16)
+    figPaper.savefig(outdir / f"{ID}_{mission}SDEpaper.png", bbox_inches="tight")
+
+    return SDE_1d_max, period_1d_max
+
 
 
 def Search_CheckIfFinished(SearchName, ID, mission, TotalSectors, base_dir=None):
