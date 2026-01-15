@@ -224,7 +224,7 @@ def runAnalysisModule(
 
     # Compute 1D SDE and locate max-significance period
     print('Create 1D SDE')
-    SDE_1d_max, period_sdeMax = AC.Search_Create1dSDE(sigmaResults_1d, Pp_search, searchName, mission, ID)
+    SDE_1d_max, period_sdeMax = AC.Search_Create1dSDE(sigmaResults_1d, Pp_search, searchName, ID)
     print('1D SDE created')
 
     # Identify best-fit hypercube indices at period_sdeMax
