@@ -11099,16 +11099,17 @@ def Search_Create1dSDE(sigmaResults_1d, Pp_search, SearchName, mission, ID, base
     med = float(np.nanmedian(sigma[valid_for_med]))
     sigma[(sigma == -27.0) | (sigma == -29.0)] = med
 
-    # tiny jitter if perfectly flat
+    # tiny jitter if perfectly flat to avoid division by zero later
     if np.nanstd(sigma) == 0:
         rng = np.random.default_rng(0)
         sigma = sigma + 1e-12 * rng.normal(size=sigma.size)
 
-    # sort and collapse duplicate periods by median (helps wotan)
+    # sort
     order = np.argsort(period)
     period = period[order]
     sigma  = sigma[order]
 
+    #if you ever want to look at unique periods only
     up, idx_start = np.unique(period, return_index=True)
     if up.size != period.size:
         sigma_new = np.empty_like(up, dtype=float)
@@ -11118,25 +11119,43 @@ def Search_Create1dSDE(sigmaResults_1d, Pp_search, SearchName, mission, ID, base
             sigma_new[i] = np.nanmedian(sigma[a:b])
         period, sigma = up, sigma_new
 
+    # --- Detrend: choose a sensible window relative to the scanned period range ---
     x_days = period / days2sec
 
-    # Detrend: fixed 30-day biweight
-    win_days = 30.0
+    xspan = float(x_days.max() - x_days.min())
+    dx_med = float(np.nanmedian(np.diff(x_days))) if x_days.size > 1 else np.nan
+
+    # Window ~10–20% of the scanned range is usually reasonable for SDE-vs-period baselines
+    # Clamp so it never becomes "global" and never becomes too tiny.
+    win_days = np.clip(0.15 * xspan, 1.0, 6.0)
+
+    # Also ensure the window contains enough points (important if the period grid is coarse)
+    if np.isfinite(dx_med) and dx_med > 0:
+        min_win_days = 31 * dx_med   # ~31 points worth of width
+        win_days = max(win_days, min_win_days)
+
     trend = None
     if wotan is not None:
         try:
             _, trend = wotan.flatten(
                 x_days, sigma,
-                window_length=win_days,
+                window_length=float(win_days),
                 method='biweight',
                 return_trend=True,
                 edge_cutoff=0.0,
-                break_tolerance=None
+                break_tolerance=0.0  # avoid treating spacing changes as "breaks"
             )
-            # patch any NaNs in trend by interpolation (edges clamp)
-            if np.any(~np.isfinite(trend)):
+
+            # Patch NaNs robustly: only interpolate if we have enough good points
+            if trend is None or not np.any(np.isfinite(trend)):
+                trend = None
+            elif np.any(~np.isfinite(trend)):
                 good = np.isfinite(trend)
-                trend = np.interp(x_days, x_days[good], trend[good]) if np.sum(good) >= 2 else None
+                if np.sum(good) >= 10:
+                    trend = np.interp(x_days, x_days[good], trend[good])
+                else:
+                    trend = None
+
         except Exception as e:
             print(f"[SDE] wotan failed ({e}); fallback median smoother.")
             trend = None
