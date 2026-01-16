@@ -11055,7 +11055,7 @@ def Search_CreateTransitMask(
         return [sigma_solutionOld]
 
 
-def Search_Create1dSDE(sigmaResults_1d, Pp_search, SearchName, mission, ID, base_dir=None):
+def Search_Create1dSDE(sigmaResults_1d, Pp_search, SearchName, mission, ID):
     '''
     Functionality:
         Compute a 1-D Signal Detection Efficiency (SDE) curve from period-scanned
