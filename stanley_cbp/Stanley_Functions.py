@@ -11107,7 +11107,7 @@ def _pick_wotan_window_by_whiteness(x_days, sigma, dx_med, Pbin_days,
     return best[1], best[2]
 
 
-def Search_Create1dSDE(sigmaResults_1d, Pp_search, Pbin, SearchName, mission, ID):
+def Search_Create1dSDE(sigmaResults_1d, Pp_search, P_bin, SearchName, mission, ID):
     '''
     Functionality:
         Compute a 1-D Signal Detection Efficiency (SDE) curve from period-scanned
