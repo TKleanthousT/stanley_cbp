@@ -11055,209 +11055,315 @@ def Search_CreateTransitMask(
         return [sigma_solutionOld]
 
 
-def _pick_wotan_window_by_whiteness(x_days, sigma, dx_med, Pbin_days,
-                                   NMIN=101, FMIN=0.05, FMAX=0.35, NCAND=15,
-                                   LAGS=10, PEAK_FRAC=0.02, LAMBDA=0.05):
+def _segments_from_mask(x, mask, gap):
     """
-    Pick wotan window_length in days by minimizing clipped-residual ACF magnitude
-    within anchored bounds based on span and grid resolution.
-    Returns: (win_days, trend)
+    Build contiguous index segments from a boolean mask, splitting
+    when spacing in x exceeds `gap`.
+
+    Parameters
+    ----------
+    x : array-like
+        Coordinate array (e.g. p_days), same length as mask.
+    mask : array-like (bool)
+        Valid-point mask.
+    gap : float
+        Gap threshold in x-units at which to split segments.
+
+    Returns
+    -------
+    segments : list of (i0, i1)
+        Index ranges [i0, i1) in the ORIGINAL indexing.
     """
-    xspan = float(x_days.max() - x_days.min())
-    w_phys = 10.0 * Pbin_days / np.pi
 
-    w_min = max(NMIN * dx_med, FMIN * xspan)
-    w_max = max(w_min * 1.01, FMAX * xspan) if xspan > 0 else (w_min * 1.01)
+    x = np.asarray(x)
+    mask = np.asarray(mask, dtype=bool)
 
-    cand = np.geomspace(w_min, w_max, NCAND) if (w_max > w_min > 0) else np.array([w_min])
-    break_tol = float(5.0 * dx_med) if np.isfinite(dx_med) else 0.0
+    idx = np.where(mask)[0]
+    if idx.size == 0:
+        return []
 
-    def acf_score(r):
-        r = np.asarray(r, float)
-        r = r[np.isfinite(r)]
-        if r.size < (LAGS + 5): return np.inf
-        thr = np.quantile(np.abs(r), 1.0 - PEAK_FRAC) if 0 < PEAK_FRAC < 0.5 else np.inf
-        r = r[np.abs(r) <= thr]
-        if r.size < (LAGS + 5): return np.inf
-        r = r - r.mean()
-        var = np.mean(r * r)
-        if not np.isfinite(var) or var <= 0: return np.inf
-        return sum(abs(np.mean(r[:-k] * r[k:]) / var) for k in range(1, LAGS + 1) if r.size > k + 5)
+    segments = []
+    start = idx[0]
+    prev_i = idx[0]
+    prev_x = x[prev_i]
 
-    best = (np.inf, None, None)
-    for win in cand:
-        try:
-            _, tr = wotan.flatten(x_days, sigma, window_length=float(win),
-                                  method="biweight", return_trend=True,
-                                  edge_cutoff=0.0, break_tolerance=break_tol)
-        except Exception:
-            continue
-        r = sigma - tr
-        score = acf_score(r) + (LAMBDA * (w_min / win))
-        if np.isfinite(score) and score < best[0]:
-            best = (score, float(win), tr)
+    for i in idx[1:]:
+        xi = x[i]
 
-    if best[1] is None:
-        win = float(np.clip(w_phys, w_min, w_max))
-        _, tr = wotan.flatten(x_days, sigma, window_length=float(win),
-                              method="biweight", return_trend=True,
-                              edge_cutoff=0.0, break_tolerance=break_tol)
-        return win, tr
+        # split if gap in x-space is too large
+        if (not np.isfinite(prev_x)) or (not np.isfinite(xi)) or ((xi - prev_x) > gap):
+            segments.append((start, prev_i + 1))
+            start = i
 
-    return best[1], best[2]
+        prev_i = i
+        prev_x = xi
+
+    segments.append((start, prev_i + 1))
+    return segments
 
 
-def Search_Create1dSDE(sigmaResults_1d, Pp_search, P_bin, SearchName, mission, ID):
-    '''
-    Functionality:
-        Compute a 1-D Signal Detection Efficiency (SDE) curve from period-scanned
-        detection statistics. Detrends σ(period) with a smooth trend (wotan
-        biweight if available, else robust median smoother), then normalizes the
-        residuals by a guarded standard deviation to produce SDE. Saves summary
-        plots and returns the peak SDE and corresponding period.
 
-    Arguments:
-        sigmaResults_1d (array-like): Detection metric vs. tested period (σ).
-        Pp_search (array-like): Tested planet periods [seconds], same length.
-        P_bin (float): Binary period [seconds], for reference in plots.
-        SearchName (str): Output subfolder under ../PlanetSearchOutput/.
-        mission (str): Mission string, used in filenames.
-        ID (str): Target identifier string, used in filenames.
-        base_dir (str|pathlib.Path or None): Root of the repo/data tree. If None, uses CWD.
+def Search_Create1dSDE_wotanPoly(sigmaResults_1d, Pp_search, SearchName, ID, mission):
 
-    Returns:
-        tuple:
-            SDE_1d_max (float): Maximum SDE value.
-            period_1d_max (float): Period [seconds] at which SDE is maximal.
-    '''
+    sigma = np.asarray(sigmaResults_1d, dtype=float).copy()
+    periodAxis = np.asarray(Pp_search, dtype=float).copy()
 
-    # Sanitize
-    sigma  = np.asarray(sigmaResults_1d, dtype=float).copy()
-    period = np.asarray(Pp_search, dtype=float).copy()
-    mask = np.isfinite(sigma) & np.isfinite(period) & (period > 0.0)
-    sigma = sigma[mask]
-    period = period[mask]
+    # -----------------------------
+    # knobs
+    # -----------------------------
+    sentinel = -27.0
+    treat_zero_as_invalid = True
+    plot_only_finite_sde = True  # set False to plot full array (will show NaNs/gaps)
+
+    # -----------------------------
+    # STEP 0: basic checks
+    # -----------------------------
+    if sigma.size == 0 or periodAxis.size == 0:
+        print("Create1dSDE: empty sigma/period arrays.")
+        return -27, -27
+
+    # positive periods only
+    maskP = np.isfinite(periodAxis) & (periodAxis > 0.0)
+    sigma = sigma[maskP]
+    periodAxis = periodAxis[maskP]
 
     if sigma.size == 0:
-        print("[SDE] No valid points after masking.")
-        return -27.0, -27.0
+        print("Create1dSDE: no positive finite periods after mask.")
+        return -27, -27
 
-    # replace sentinels with median of non-sentinels
-    valid_for_med = np.isfinite(sigma) & (sigma != -27.0) & (sigma != -29.0)
-    if not np.any(valid_for_med):
-        print("Unstable or no valid sigma values to compute median from.")
-        return -27.0, -27.0
-    med = float(np.nanmedian(sigma[valid_for_med]))
-    sigma[(sigma == -27.0) | (sigma == -29.0)] = med
+    p_days = (periodAxis / days2sec)
 
-    # tiny jitter if perfectly flat to avoid division by zero later
-    if np.nanstd(sigma) == 0:
-        rng = np.random.default_rng(0)
-        sigma = sigma + 1e-12 * rng.normal(size=sigma.size)
+    # validity: finite + not sentinel (+ optionally > 0)
+    valid_basic = np.isfinite(p_days) & np.isfinite(sigma) & (sigma != sentinel)
+    valid = valid_basic.copy()
+    if treat_zero_as_invalid:
+        valid &= (sigma > 0)
 
-    # sort
-    order = np.argsort(period)
-    period = period[order]
-    sigma  = sigma[order]
+    # -----------------------------
+    # Better debug prints
+    # -----------------------------
+    print("unique sigma values (first 10):", np.unique(sigma)[:10])
+    print("count not sentinel:", int(valid_basic.sum()), "of", int(sigma.size))
+    print("count usable (after zero rule):", int(valid.sum()), "of", int(sigma.size))
+    print("min/max sigma:", float(np.nanmin(sigma)), float(np.nanmax(sigma)))
 
-    # collapse duplicate periods
-    up, idx_start = np.unique(period, return_index=True)
-    if up.size != period.size:
-        sigma_new = np.empty_like(up, dtype=float)
-        for i in range(up.size):
-            a = idx_start[i]
-            b = idx_start[i+1] if i+1 < up.size else period.size
-            sigma_new[i] = np.nanmedian(sigma[a:b])
-        period, sigma = up, sigma_new
+    # If everything is sentinel
+    if np.nanmax(sigma) == sentinel:
+        print("Create1dSDE: ALL sentinel (-27). Very unstable.")
+        return -27, -27
 
-    x_days = period / days2sec
-    dx_med = float(np.nanmedian(np.diff(x_days))) if x_days.size > 1 else np.nan
-    if not np.isfinite(dx_med) or dx_med <= 0:
-        dx_med = float((x_days.max() - x_days.min()) / max(1, x_days.size - 1))
+    # If sigma is constant (especially all zeros), SDE is meaningless
+    # (this is exactly your current case)
+    sig_finite = sigma[np.isfinite(sigma)]
+    if sig_finite.size > 0:
+        smin = float(np.min(sig_finite))
+        smax = float(np.max(sig_finite))
+        if smax == smin:
+            msg = f"Create1dSDE: sigma is constant (min=max={smin}). No SDE can be computed."
+            if treat_zero_as_invalid and smax <= 0:
+                msg += " With treat_zero_as_invalid=True this means NO usable points."
+            print(msg)
+            return -27, -27
 
-    Pbin_days = float(np.asarray(P_bin, dtype=float) / days2sec)
+    # If no usable points after the zero rule, exit cleanly
+    if valid.sum() < 5:
+        print("Create1dSDE: too few usable points to compute trend/SDE.")
+        return -27, -27
 
-    if wotan is not None:
-        win_days, trend = _pick_wotan_window_by_whiteness(x_days, sigma, dx_med, Pbin_days)
-        print(f"[SDE] auto-picked win_days={win_days:.4g} d")
+    # -----------------------------
+    # STEP 1: trend container
+    # -----------------------------
+    sigmaTrend = np.full_like(sigma, np.nan, dtype=float)
+
+    # If too few usable points: constant trend on usable points
+    if valid.sum() < 30:
+        sigmaTrend[valid] = np.nanmedian(sigma[valid])
     else:
-        trend = np.nanmedian(sigma) * np.ones_like(sigma)
+        # robust spacing estimate from valid points
+        pv = p_days[valid]
+        pv_sorted = np.sort(pv)
+        dp = np.diff(pv_sorted)
+        dp = dp[np.isfinite(dp) & (dp > 0)]
+        dp_med = float(np.median(dp)) if dp.size else np.nan
+        if (not np.isfinite(dp_med)) or (dp_med <= 0):
+            dp_med = float((pv.max() - pv.min()) / max(1, pv.size - 1))
 
-    # SDE normalization with guardrails
-    SDE = sigma - trend
-    initialSTD = float(np.std(SDE)) if np.isfinite(np.std(SDE)) else 0.0
+        # define what counts as a "gap" in period space
+        gap = 5.0 * dp_med
 
-    if initialSTD > 0.0:
-        clipped = SDE[(SDE < 2 * initialSTD) & (SDE > -2 * initialSTD)]
+        # build contiguous segments in the ORIGINAL indexing
+        segs = _segments_from_mask(p_days, valid, gap=gap)
+
+        # -----------------------------
+        # knobs: when to use poly vs wotan
+        # -----------------------------
+        POLY_SPAN_DAYS = 10.0
+        POLY_MINPTS    = 80
+        CLIP_SIGMA     = 5.0
+        MIN_KEEP_FRAC  = 0.5
+
+        window_pts = 201
+        w_min_days = 2.0
+        w_max_days = 200.0
+
+        def robust_sigma_from_resid(resid):
+            med = np.median(resid)
+            mad = np.median(np.abs(resid - med))
+            if mad > 0 and np.isfinite(mad):
+                return 1.4826 * mad
+            s = np.std(resid)
+            return s if (s > 0 and np.isfinite(s)) else 1.0
+
+        def fit_poly_bic(x, y, deg):
+            c1 = np.polyfit(x, y, deg=deg)
+            t1 = np.polyval(c1, x)
+            r1 = y - t1
+
+            sig = robust_sigma_from_resid(r1)
+            keep = np.abs(r1) < (CLIP_SIGMA * sig)
+            if keep.mean() < MIN_KEEP_FRAC:
+                keep = np.ones_like(keep, dtype=bool)
+
+            c2 = np.polyfit(x[keep], y[keep], deg=deg)
+            t2 = np.polyval(c2, x)
+            rk = y[keep] - np.polyval(c2, x[keep])
+
+            n = rk.size
+            k = deg + 1
+            rss = float(np.sum(rk * rk))
+            rss = max(rss, 1e-300)
+            bic = n * np.log(rss / n) + k * np.log(n)
+            return t2, bic
+
+        for i0, i1 in segs:
+            xseg0 = p_days[i0:i1]
+            yseg0 = sigma[i0:i1]
+
+            m = valid[i0:i1] & np.isfinite(xseg0) & np.isfinite(yseg0)
+            if m.sum() < 5:
+                continue
+
+            xseg = xseg0[m]
+            yseg = yseg0[m]
+
+            xs = np.sort(xseg)
+            dps = np.diff(xs)
+            dps = dps[np.isfinite(dps) & (dps > 0)]
+            dp_seg = float(np.median(dps)) if dps.size else dp_med
+            span_seg = float(xs.max() - xs.min())
+            nseg = int(xseg.size)
+
+            use_poly = (wotan is None) or (span_seg < POLY_SPAN_DAYS) or (nseg < POLY_MINPTS)
+
+            if use_poly:
+                t1, bic1 = fit_poly_bic(xseg, yseg, deg=1)
+                t2, bic2 = fit_poly_bic(xseg, yseg, deg=2)
+                tr_seg = t2 if (bic2 < bic1) else t1
+            else:
+                win_days = window_pts * dp_seg
+                win_days = np.clip(
+                    win_days,
+                    w_min_days,
+                    min(w_max_days, max(w_min_days * 1.01, 0.5 * span_seg))
+                )
+
+                break_tol = 5.0 * dp_seg
+
+                try:
+                    _, tr_seg = wotan.flatten(
+                        xseg, yseg,
+                        window_length=float(win_days),
+                        method="biweight",
+                        return_trend=True,
+                        edge_cutoff=0.0,
+                        break_tolerance=float(break_tol)
+                    )
+                except Exception:
+                    tr_seg = np.full_like(yseg, np.nanmedian(yseg), dtype=float)
+
+            seg_idx = np.arange(i0, i1)[m]
+            sigmaTrend[seg_idx] = tr_seg
+
+    # -----------------------------
+    # STEP 2: SDE
+    # -----------------------------
+    SDE_raw = np.full_like(sigma, np.nan, dtype=float)
+    ok = valid & np.isfinite(sigmaTrend)
+    if ok.sum() < 5:
+        print("Create1dSDE: trend undefined on usable points; cannot compute SDE.")
+        return -27, -27
+
+    SDE_raw[ok] = sigma[ok] - sigmaTrend[ok]
+
+    r = SDE_raw[ok]
+    med = np.nanmedian(r)
+    mad = np.nanmedian(np.abs(r - med))
+    scale = 1.4826 * mad
+    if (not np.isfinite(scale)) or (scale <= 0):
+        scale = np.nanstd(r)
+        if (not np.isfinite(scale)) or (scale <= 0):
+            scale = 1.0
+
+    SDE_1d = SDE_raw / scale
+
+    finite = np.isfinite(SDE_1d)
+    if finite.any():
+        idx_max = int(np.nanargmax(SDE_1d))
+        SDE_1d_max = float(SDE_1d[idx_max])
+        period_1d_max = float(periodAxis[idx_max])
     else:
-        clipped = SDE
+        SDE_1d_max = -27
+        period_1d_max = -27
 
-    clipSTD = float(np.std(clipped)) if clipped.size else 0.0
-
-    MIN_FRAC   = 0.30
-    FLOOR_FRAC = 0.50
-
-    use_clip = (
-        np.isfinite(clipSTD)
-        and clipSTD > 0.0
-        and clipped.size >= MIN_FRAC * max(1, SDE.size)
-        and initialSTD > 0.0
-        and clipSTD >= FLOOR_FRAC * initialSTD
-    )
-
-    denom = clipSTD if use_clip else (initialSTD if initialSTD > 0.0 else 1.0)
-    SDE /= denom
-
-    print(
-        f"[SDE diag] N={SDE.size} kept={clipped.size} ({clipped.size/max(1,SDE.size):.2%}) "
-        f"initialSTD={initialSTD:.6g} clipSTD={clipSTD:.6g} "
-        f"denom={'clipSTD' if use_clip else ('initialSTD' if initialSTD>0 else '1.0')} "
-        f"max={np.nanmax(SDE):.3f}"
-    )
-
-    SDE_1d_max = float(np.nanmax(SDE))
-    period_1d_max = float(period[np.nanargmax(SDE)])
-
-    print(f"[SDE] Max={SDE_1d_max:.3f} at {period_1d_max/days2sec:.5f} d")
-
-    # plots
+    # -----------------------------
+    # STEP 3: plots (only if meaningful)
+    # -----------------------------
     fig = plt.figure(figsize=(10, 10))
+
     ax = fig.add_subplot(2, 1, 1)
     ax.set_xlabel("Tested planet period (days)")
     ax.set_ylabel("sigma_1d")
     ax.set_title("all ecc and omega")
-    ax.plot(period / days2sec, sigma)
-    ax.plot(period / days2sec, trend, linestyle="--", color="red")
+    ax.plot(p_days, sigma, label="sigma")
+
+    mtr = np.isfinite(sigmaTrend)
+    ax.plot(p_days[mtr], sigmaTrend[mtr], linestyle="--", color="red", label="trend")
+    ax.legend(loc="best")
 
     ax = fig.add_subplot(2, 1, 2)
     ax.set_xlabel("Tested planet period (days)")
     ax.set_ylabel("SDE_1d")
-    ax.set_title("all ecc and omega")
     ax.text(
         0.8, 0.9, f"Max SDE = {SDE_1d_max:.3f}",
-        horizontalalignment="center",
-        transform=ax.transAxes,
-        fontstyle="italic",
-        fontsize=10
+        transform=ax.transAxes, fontsize=10, fontstyle="italic"
     )
-    ax.plot(period / days2sec, SDE)
+
+    if plot_only_finite_sde:
+        ax.plot(p_days[finite], SDE_1d[finite], "-")
+        ax.set_xlim(p_days.min(), p_days.max())
+    else:
+        ax.plot(p_days, SDE_1d, "-")
+
+    figPaper = plt.figure(figsize=(18, 6))
+    axPaper = figPaper.add_subplot(111)
+    if plot_only_finite_sde:
+        axPaper.plot(p_days[finite], SDE_1d[finite], "-")
+        axPaper.set_xlim(p_days.min(), p_days.max())
+    else:
+        axPaper.plot(p_days, SDE_1d, "-")
+
+    axPaper.set_xlabel("Planet Period (days)", fontsize=20)
+    axPaper.set_ylabel("Signal Detection Efficiency (SDE)", fontsize=20)
+    axPaper.tick_params(axis="x", labelsize=16)
+    axPaper.tick_params(axis="y", labelsize=16)
 
     base_root = _resolve_base_dir(None)
     outdir = base_root / "PlanetSearchOutput" / str(SearchName)
     _ensure_parent(outdir / "dummy.txt")
     fig.savefig(outdir / f"{ID}_{mission}SDE.png", bbox_inches="tight")
-
-    figPaper = plt.figure(figsize=(18, 6))
-    axPaper = figPaper.add_subplot(111)
-    axPaper.plot(period / days2sec, SDE, color="blue")
-    axPaper.set_xlabel("Planet Period (days)", fontsize=20)
-    axPaper.set_ylabel("Signal Detection Efficiency (SDE)", fontsize=20)
-    axPaper.tick_params(axis="x", labelsize=16)
-    axPaper.tick_params(axis="y", labelsize=16)
     figPaper.savefig(outdir / f"{ID}_{mission}SDEpaper.png", bbox_inches="tight")
 
     return SDE_1d_max, period_1d_max
-
 
 def Search_CheckIfFinished(SearchName, ID, mission, TotalSectors, base_dir=None):
     '''
