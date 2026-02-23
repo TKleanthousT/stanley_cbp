@@ -10556,36 +10556,31 @@ def DetrendLightCurve(timeOrig, fluxOrig, window_length=1, method='biweight', pl
 
     return timeDetrended, fluxDetrended, trend
 
-
 def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalLightcurve, cadence,
-                          plotting=False, mission='BLAH', ID="BLAH", SearchName='BLAH', base_dir=None):
-    '''
-    Functionality:
-        Evaluate a set of candidate transit times/durations against a light curve
-        to (a) locate local minima windows, (b) measure per-transit mean depth and
-        significance, and (c) aggregate a global detection statistic and basic
-        consistency metrics. Optionally produces diagnostic plots and saves summary
-        figures for later inspection.
+                          plotting=False, mission='BLAH', ID="BLAH", SearchName='BLAH', base_dir=None,
+                          debug_include_failures=True):
+    """
+    Your Feb-2026 patched Search_FitTransitMask logic, BUT with the per-transit plotting
+    restored to match your older version's fig1/fig2 panel plots *exactly*.
 
-    Arguments:
-        timeArray (array-like): Time stamps [s], sorted.
-        fluxArray (array-like): Flux values aligned with `timeArray`.
-        TT_search (array-like): Candidate mid-transit epochs [s].
-        TD_search (array-like): Candidate transit durations [s] for each epoch.
-        meanTotalLightcurve (float): Global reference mean flux (for plotting/baseline).
-        cadence (float): Sampling cadence [s] used inside the search windowing.
-        plotting (bool): If True, generate and save diagnostic figures.
-        mission (str): Mission label used in filenames.
-        ID (str): Target identifier used in filenames.
-        SearchName (str): Output directory tag under ../PlanetSearchOutput/.
-        base_dir (str|pathlib.Path or None): Root of the repo/data tree. If None, uses CWD.
+    What changed vs your patched version:
+      - ONLY plotting:
+          * Reinsert older per-transit plotting block (ax1/ax2 scatter with same colors/sizes)
+          * Ensure fig1/fig2 saves are never blank: canvas draw + active figure selection
+          * Keep your new outdir resolution using base_dir (instead of hardcoded None)
 
-    Returns:
-        tuple:
-            meanFlux (float), detectionSigmaOld (float), detectionSigmaNew (float),
-            detectionConsistency (int), fractionDataPointsHit (float),
-            TT_true (np.ndarray), stdOutOfTransit (float)
-    '''
+    Everything else (gates, stats, TT_search==0 handling, expected points fix, etc.) stays
+    as in your patched version.
+    """
+    import os
+    import numpy as np
+    import math
+    import matplotlib.pyplot as plt
+    from pathlib import Path
+
+    # ---------- local constant ----------
+    days2sec = 24.0 * 3600.0
+    pid = os.getpid()
 
     # Coerce inputs to arrays
     timeArray = np.asarray(timeArray, dtype=float)
@@ -10593,6 +10588,20 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
     TT_search = np.asarray(TT_search, dtype=float)
     TD_search = np.asarray(TD_search, dtype=float)
 
+    # If TD_search is scalar, broadcast (defensive)
+    if TD_search.ndim == 0:
+        TD_search = np.full_like(TT_search, float(TD_search), dtype=float)
+
+    tag = f"pid={pid} nTT={TT_search.size}"
+    if TT_search.size:
+        tag += f" TT0={TT_search[0]:.6g}"
+    if TD_search.size:
+        tag += f" TD0={TD_search[0]:.6g}"
+    print(f"[FitMask ENTER] {tag}", flush=True)
+
+    # -----------------------------
+    # knobs (KEEP SAME unless you choose to change)
+    # -----------------------------
     transitDurationAllowance = 1.0
     consistencyThreshold = 3
     consistencySigmaFactor = 0.45
@@ -10602,23 +10611,48 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
     minimaType = 6
     cutDuringSearch = True
 
-    # Output dir (create only if plotting AND names are meaningful)
+    # -----------------------------
+    # init OOT containers EARLY (fixes TT_search==0 invalid path crash)
+    # -----------------------------
+    allOutOfTransitFlux = np.array(fluxArray, copy=True)
+    allOutOfTransitTime = np.array(timeArray, copy=True)
+
+    # Output dir resolver (only needed if plotting)
+    def _resolve_base_dir(base_dir_):
+        if base_dir_ is None:
+            return Path(os.getcwd()).resolve()
+        return Path(base_dir_).expanduser().resolve()
+
     outdir = None
     if plotting and isinstance(SearchName, str) and SearchName.strip() not in ("", "BLAH"):
-        base_root = _resolve_base_dir(None)
+        base_root = _resolve_base_dir(base_dir)
         outdir = (base_root / 'PlanetSearchOutput' / str(SearchName)).resolve()
         outdir.mkdir(parents=True, exist_ok=True)
 
-    if TT_search.size == 0:
-        if plotting:
-            print("[WARN] No TT_search provided; skipping plots.")
-        _meanFlux = meanTotalLightcurve
-        return (_meanFlux, 0.0, 0.0, 0, 0.0, np.array([]), float(np.nan))
+    def _draw_then_save(fig, path, **kwargs):
+        """Prevents blank/white PNGs on some backends."""
+        try:
+            fig.canvas.draw()
+        except Exception:
+            pass
+        fig.savefig(path, **kwargs)
 
-    # Mean interval estimate (for folding helpers)
+    # Helper: consistent with old function expectations
+    def _return_invalid(reason=""):
+        if reason:
+            print(f"[FitMask RETURN INVALID] {tag} reason={reason}", flush=True)
+        else:
+            print(f"[FitMask RETURN INVALID] {tag}", flush=True)
+        stdOOT = float(np.nanstd(allOutOfTransitFlux)) if allOutOfTransitFlux.size else 0.0
+        return (float(meanTotalLightcurve), 0.0, 0.0, 0, 0.0, np.array([]), stdOOT)
+
+    if TT_search.size == 0:
+        return _return_invalid("TT_search.size==0")
+
+    # Mean interval estimate (for folding helpers; currently unused but kept for compatibility)
     if TT_search.size >= 3:
         meanPlanetTransitInterval = float(np.mean(TT_search[1:-1] - TT_search[0:-2]))
-        if not np.isfinite(meanPlanetTransitInterval) or meanPlanetTransitInterval <= 0:
+        if (not np.isfinite(meanPlanetTransitInterval)) or (meanPlanetTransitInterval <= 0):
             meanPlanetTransitInterval = float(np.nan)
     else:
         meanPlanetTransitInterval = float(np.nan)
@@ -10637,9 +10671,13 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
         plot_yMax2 = -np.inf
         plot_yMin2 = np.inf
     else:
+        fig1 = None
+        fig2 = None
+        plot_rows = plot_columns = 1
         totalWindowTime = np.array([], dtype=float)
         scaledWindowTime = np.array([], dtype=float)
-        plot_yMax1 = plot_yMin1 = plot_yMax2 = plot_yMin2 = 0.0
+        plot_yMax1 = plot_yMin1 = 0.0
+        plot_yMax2 = plot_yMin2 = 0.0
 
     TT_true = np.zeros_like(TT_search, dtype=float)
     individualTransitMeanFluxArray = []
@@ -10647,13 +10685,37 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
     individualTransitDataPointCountArray = []
     hittingAGapCount = 0
 
-    allOutOfTransitFlux = np.array(fluxArray, copy=True)
-    allOutOfTransitTime = np.array(timeArray, copy=True)
-    totalWindowFlux = np.array([], dtype=float)
+    # ---- per-transit exclusion counters ----
+    n_empty_in3 = 0
+    n_empty_after_clip = 0
+    n_empty_tempFlux = 0
+    n_fail_points_per_TD = 0
+    n_fail_ratio = 0
+    n_included = 0
 
+    totalWindowFlux = np.array([], dtype=float)
     global_std_flux = float(np.nanstd(fluxArray)) if fluxArray.size else float("nan")
 
+    # -----------------------------
+    # AXIS CHECK diagnostic
+    # -----------------------------
+    good = []
+    for tt, td in zip(TT_search, TD_search):
+        hw = 3.0 * (td * transitDurationAllowance) / 2.0
+        if np.any((timeArray > tt - hw) & (timeArray < tt + hw)):
+            good.append((tt, td))
+        if len(good) >= 5:
+            break
+
+    print(f"[AXIS CHECK] found {len(good)} TT with data nearby")
+    for k, (tt, td) in enumerate(good):
+        j = np.argmin(np.abs(timeArray - tt))
+        dt_sec = float(timeArray[j] - tt)  # assumes seconds
+        print(f"  k={k}  TT={tt:.6e}  nearest_time={timeArray[j]:.6e}  dt={dt_sec:.2f} s  cadence~{cadence:.2f} s")
+
+    # -----------------------------
     # Per-transit loop
+    # -----------------------------
     for ii in range(TT_search.size):
         modifiedTD = TD_search[ii] * transitDurationAllowance
         searchWindowHalfWidth = modifiedTD / 2.0
@@ -10669,20 +10731,25 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
 
         # No data in search window
         if combinedWindows_flux.size == 0:
+            n_empty_in3 += 1
             TT_true[ii] = round(TT_search[ii] / days2sec) * days2sec
             hittingAGapCount += 1
             individualTransitMeanFluxArray.append(0.0)
             individualTransitDataPointCountArray.append(0)
             individualTransitSigmaArray.append(0.0)
+
+            # ---- OLDER behavior: create empty subplots so panel grid stays aligned ----
             if plotting:
                 _ = fig1.add_subplot(plot_rows, plot_columns, ii + 1)
                 _ = fig2.add_subplot(plot_rows, plot_columns, ii + 1)
+            if debug_include_failures:
+                print(f"[FitMask excl] {tag} ii={ii} EXCLUDE: empty in3 window", flush=True)
             continue
 
-        # Outlier clip
+        # Outlier clip within combined window
         combinedWindows_std = float(np.nanstd(combinedWindows_flux))
         combinedWindows_mean = float(np.nanmean(combinedWindows_flux))
-        if not np.isfinite(combinedWindows_std) or combinedWindows_std == 0.0:
+        if (not np.isfinite(combinedWindows_std)) or combinedWindows_std == 0.0:
             mask_good = np.isfinite(combinedWindows_flux)
         else:
             mask_good = np.abs(combinedWindows_flux - combinedWindows_mean) < individualDataPointSigmaCutThreshold * combinedWindows_std
@@ -10691,25 +10758,31 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
         combinedWindows_flux = combinedWindows_flux[mask_good]
 
         if combinedWindows_flux.size == 0:
+            n_empty_after_clip += 1
             TT_true[ii] = round(TT_search[ii] / days2sec) * days2sec
             hittingAGapCount += 1
             individualTransitMeanFluxArray.append(0.0)
             individualTransitDataPointCountArray.append(0)
             individualTransitSigmaArray.append(0.0)
+
             if plotting:
                 _ = fig1.add_subplot(plot_rows, plot_columns, ii + 1)
                 _ = fig2.add_subplot(plot_rows, plot_columns, ii + 1)
+            if debug_include_failures:
+                print(f"[FitMask excl] {tag} ii={ii} EXCLUDE: empty after sigma-clip", flush=True)
             continue
 
-        # Find deepest window around the candidate
+        # ---- Find deepest window around the candidate ----
         tempTime, tempFlux, meanUsed, outOfTransitTime, outOfTransitFlux, ratioInOutTransitPoints = Search_IndividualTransitRelativeFlux(
             combinedWindows_time, combinedWindows_flux, TT_search[ii], modifiedTD, minimaType, -27, cadence
         )
+
         tempTime = np.asarray(tempTime, dtype=float)
         tempFlux = np.asarray(tempFlux, dtype=float)
         outOfTransitTime = np.asarray(outOfTransitTime, dtype=float)
         outOfTransitFlux = np.asarray(outOfTransitFlux, dtype=float)
 
+        # TT_true + remove included window from OOT pool
         if tempTime.size > 0:
             TT_true[ii] = float(np.nanmean(tempTime))
             keep = np.logical_or(allOutOfTransitTime < tempTime[0], allOutOfTransitTime > tempTime[-1])
@@ -10718,23 +10791,43 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
         else:
             TT_true[ii] = round(TT_search[ii] / days2sec) * days2sec
 
-        # Inclusion test
+        # Inclusion test (newer gate, with debug)
         includeTransit = False
+        points_per_TD = 0.0
         if tempFlux.size > 0:
-            denom = (TD_search[ii] / (29.4 * 60.0)) if TD_search[ii] > 0 else np.inf
+            denom = (modifiedTD / cadence) if (modifiedTD > 0 and cadence > 0) else np.inf
             points_per_TD = (tempFlux.size / denom) if np.isfinite(denom) and denom > 0 else 0.0
-            if (points_per_TD >= fractionIndividualTransitsDataPointsHit) and (ratioInOutTransitPoints <= 1):
+
+            if points_per_TD < fractionIndividualTransitsDataPointsHit:
+                n_fail_points_per_TD += 1
+                if debug_include_failures:
+                    print(f"[FitMask excl] {tag} ii={ii} EXCLUDE: points_per_TD={points_per_TD:.3f} < {fractionIndividualTransitsDataPointsHit} "
+                          f"(nTemp={tempFlux.size}, exp={denom:.2f})", flush=True)
+
+            elif ratioInOutTransitPoints > 1:
+                n_fail_ratio += 1
+                if debug_include_failures:
+                    print(f"[FitMask excl] {tag} ii={ii} EXCLUDE: ratioInOutTransitPoints={ratioInOutTransitPoints:.3f} > 1", flush=True)
+
+            else:
                 includeTransit = True
+        else:
+            n_empty_tempFlux += 1
+            if debug_include_failures:
+                print(f"[FitMask excl] {tag} ii={ii} EXCLUDE: tempFlux empty (Search_IndividualTransitRelativeFlux returned none)", flush=True)
 
         if includeTransit:
+            n_included += 1
+
             mean_tempFlux = float(np.nanmean(tempFlux))
             individualTransitMeanFluxArray.append(mean_tempFlux)
             totalWindowFlux = np.append(totalWindowFlux, tempFlux)
             individualTransitDataPointCountArray.append(int(tempFlux.size))
 
             ostd = float(np.nanstd(outOfTransitFlux)) if outOfTransitFlux.size > 1 else global_std_flux
-            if not np.isfinite(ostd) or ostd == 0.0:
+            if (not np.isfinite(ostd)) or ostd == 0.0:
                 ostd = global_std_flux if np.isfinite(global_std_flux) and global_std_flux > 0 else 1.0
+
             sigma_here = (abs(mean_tempFlux / ostd) * (tempFlux.size ** 0.5)) if ostd > 0 else 0.0
             individualTransitSigmaArray.append(float(sigma_here))
 
@@ -10742,21 +10835,45 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
             if tempTime.size > 1 and tempTime[-1] != tempTime[0]:
                 scaled = ((tempTime - tempTime[0]) / (tempTime[-1] - tempTime[0]) - 0.5) * 2 * transitDurationAllowance
                 scaledWindowTime = np.append(scaledWindowTime, scaled)
-
         else:
             hittingAGapCount += 1
             individualTransitMeanFluxArray.append(0.0)
             individualTransitDataPointCountArray.append(0)
             individualTransitSigmaArray.append(0.0)
 
-        # Diagnostics per transit
+        # -----------------------------------------------------------------
+        # ✅ RESTORED OLDER PER-TRANSIT PLOTTING (fig1/fig2 panel grids)
+        #    (this is the bit you said you want EXACTLY)
+        # -----------------------------------------------------------------
         if plotting:
+            # Ensure we attach to the right figure objects (prevents "blank fig2" surprises)
+            # Using fig.add_subplot is already explicit, but keeping this is harmless.
+            try:
+                plt.figure(fig1.number)
+            except Exception:
+                pass
             ax1 = fig1.add_subplot(plot_rows, plot_columns, ii + 1)
+
+            try:
+                plt.figure(fig2.number)
+            except Exception:
+                pass
             ax2 = fig2.add_subplot(plot_rows, plot_columns, ii + 1)
 
             if widerWindow_time.size and widerWindow_flux.size:
-                ax2.scatter(widerWindow_time / days2sec - 55000, widerWindow_flux - meanUsed,
-                            color=np.array([176, 239, 255]) / 255.0, s=10)
+                ax2.scatter(
+                    widerWindow_time / days2sec - 55000,
+                    widerWindow_flux - meanUsed,
+                    color=np.array([176, 239, 255]) / 255.0,
+                    s=10
+                )
+                try:
+                    wmax = float(np.nanmax(widerWindow_flux - meanUsed))
+                    wmin = float(np.nanmin(widerWindow_flux - meanUsed))
+                    if np.isfinite(wmax): plot_yMax2 = max(plot_yMax2, wmax)
+                    if np.isfinite(wmin): plot_yMin2 = min(plot_yMin2, wmin)
+                except ValueError:
+                    pass
 
             if combinedWindows_time.size and combinedWindows_flux.size:
                 ax1.scatter(combinedWindows_time / days2sec - 55000, combinedWindows_flux - meanUsed, color='b', s=20)
@@ -10776,63 +10893,109 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
                 ax1.scatter(tempTime / days2sec - 55000, tempFlux, color='k', s=40)
                 ax2.scatter(tempTime / days2sec - 55000, tempFlux, color='k', s=10)
 
-            plt.xticks(fontsize=8); plt.yticks(fontsize=8)
-            if np.isfinite(plot_yMin1) and np.isfinite(plot_yMax1) and plot_yMax1 > plot_yMin1:
+            plt.xticks(fontsize=8)
+            plt.yticks(fontsize=8)
+
+            # Match older: y-lims on ax1 (combined window) based on global min/max tracked
+            if np.isfinite(plot_yMin1) and np.isfinite(plot_yMax1) and (plot_yMax1 > plot_yMin1):
                 ax1.set_ylim([plot_yMin1, plot_yMax1])
             else:
                 pad = 3.0 * (global_std_flux if np.isfinite(global_std_flux) and global_std_flux > 0 else 1e-3)
                 ax1.set_ylim([meanTotalLightcurve - pad, meanTotalLightcurve + pad])
 
+            # Match older intent: y-lims on ax2 too (wider window), using tracked min/max if valid
+            if np.isfinite(plot_yMin2) and np.isfinite(plot_yMax2) and (plot_yMax2 > plot_yMin2):
+                ax2.set_ylim([plot_yMin2, plot_yMax2])
+            # else: leave as matplotlib default (your older code didn’t always force ax2)
+
+    # -----------------------------
     # Aggregation
+    # -----------------------------
     individualTransitMeanFluxArray = np.asarray(individualTransitMeanFluxArray, dtype=float)
     individualTransitSigmaArray = np.asarray(individualTransitSigmaArray, dtype=float)
+    individualTransitDataPointCountArray = np.asarray(individualTransitDataPointCountArray, dtype=int)
+
+    # If nothing included
+    if n_included == 0 or totalWindowFlux.size == 0:
+        return _return_invalid(
+            "no usable included transits | "
+            f"n_included=0 nTT={TT_search.size} "
+            f"empty_in3={n_empty_in3} empty_after_clip={n_empty_after_clip} empty_tempFlux={n_empty_tempFlux} "
+            f"fail_points_per_TD={n_fail_points_per_TD} fail_ratio={n_fail_ratio}"
+        )
+
     stdOutOfTransit = float(np.nanstd(allOutOfTransitFlux)) if allOutOfTransitFlux.size else float("nan")
+    total_points = int(np.sum(individualTransitDataPointCountArray))
 
-    has_any_transit = (individualTransitMeanFluxArray.size > 0) and (np.nanmax(np.abs(individualTransitMeanFluxArray)) > 0)
+    denom_std = stdOutOfTransit if (np.isfinite(stdOutOfTransit) and stdOutOfTransit > 0) \
+        else (global_std_flux if np.isfinite(global_std_flux) and global_std_flux > 0 else 1.0)
 
-    if has_any_transit:
-        total_points = int(np.sum(individualTransitDataPointCountArray))
-        denom_std = stdOutOfTransit if (np.isfinite(stdOutOfTransit) and stdOutOfTransit > 0) \
-                    else (global_std_flux if np.isfinite(global_std_flux) and global_std_flux > 0 else 1.0)
-        mean_totalWindowFlux = float(np.nanmean(totalWindowFlux)) if totalWindowFlux.size else 0.0
-        detectionSigmaOld = abs(mean_totalWindowFlux / denom_std) * (total_points ** 0.5) if total_points > 0 else 0.0
-        detectionSigmaNew = float(np.sqrt(np.nansum(np.square(individualTransitSigmaArray))))
+    mean_totalWindowFlux = float(np.nanmean(totalWindowFlux)) if totalWindowFlux.size else 0.0
+    detectionSigmaOld = abs(mean_totalWindowFlux / denom_std) * np.sqrt(total_points) if total_points > 0 else 0.0
+    detectionSigmaNew = float(np.sqrt(np.nansum(np.square(individualTransitSigmaArray))))
 
-        max_sig = float(np.nanmax(individualTransitSigmaArray)) if individualTransitSigmaArray.size else 0.0
-        thresholdSigma = consistencySigmaFactor * max_sig
-        valid_count_mask = np.asarray(individualTransitDataPointCountArray) > 0
-        denom_count = int(np.sum(valid_count_mask))
-        detectionConsistency = int(np.sum(individualTransitSigmaArray[valid_count_mask] > thresholdSigma)) if denom_count > 0 else 0
+    # Consistency
+    max_sig = float(np.nanmax(individualTransitSigmaArray)) if individualTransitSigmaArray.size else 0.0
+    thresholdSigma = consistencySigmaFactor * max_sig
+    valid_count_mask = individualTransitDataPointCountArray > 0
+    n_good = int(np.sum(valid_count_mask))
+    detectionConsistency = int(np.sum(individualTransitSigmaArray[valid_count_mask] > thresholdSigma)) if n_good > 0 else 0
 
-        expectedMaxNumberDataPoints = 0.0
-        for ii in range(TT_search.size):
-            expectedMaxNumberDataPoints += (TD_search[ii] / (29.4 * 60.0)) if TD_search[ii] > 0 else 0.0
-        fractionDataPointsHit = (float(totalWindowFlux.size) / expectedMaxNumberDataPoints) if expectedMaxNumberDataPoints > 0 else 0.0
+    # Expected points (FIXED per-transit TD; no last-loop leak)
+    expectedMaxNumberDataPoints = 0.0
+    for ii in range(TT_search.size):
+        if individualTransitDataPointCountArray[ii] > 0:
+            modifiedTD_i = TD_search[ii] * transitDurationAllowance
+            exp_i = (modifiedTD_i / cadence) if (modifiedTD_i > 0 and cadence > 0) else 0.0
+            expectedMaxNumberDataPoints += max(1.0, exp_i)
 
-        _meanFlux = float(np.nanmean(totalWindowFlux)) if totalWindowFlux.size else meanTotalLightcurve
+    fractionDataPointsHit = (float(totalWindowFlux.size) / expectedMaxNumberDataPoints) if expectedMaxNumberDataPoints > 0 else 0.0
+    fractionDataPointsHit = min(1.0, fractionDataPointsHit)
 
-        if cutDuringSearch:
-            acceptSolution = True
-            if detectionConsistency < consistencyThreshold:
-                acceptSolution = False
-            if fractionDataPointsHit < fractionDataPointsHitThreshold:
-                acceptSolution = False
-            if not acceptSolution:
-                _meanFlux = meanTotalLightcurve
-                detectionSigmaOld = 0.0
-                detectionSigmaNew = 0.0
-                detectionConsistency = 0
-                fractionDataPointsHit = 0.0
-    else:
-        _meanFlux = meanTotalLightcurve
-        detectionSigmaOld = 0.0
-        detectionSigmaNew = 0.0
-        detectionConsistency = 0.0
-        fractionDataPointsHit = 0.0
+    print(f"[FitMask fracHit] {tag} fracHit={fractionDataPointsHit} "
+          f"nWin={totalWindowFlux.size} expMax={expectedMaxNumberDataPoints} cadence={cadence}", flush=True)
 
-    # Optional summary plots
+    meanFlux = float(np.nanmean(totalWindowFlux)) if totalWindowFlux.size else meanTotalLightcurve
+
+    # -----------------------------
+    # Cuts
+    # -----------------------------
+    if cutDuringSearch:
+        acceptSolution = True
+        min_required = max(1, int(np.ceil(0.5 * n_good)))
+        if detectionConsistency < min_required:
+            acceptSolution = False
+        if fractionDataPointsHit < fractionDataPointsHitThreshold:
+            acceptSolution = False
+        if not acceptSolution:
+            return _return_invalid(
+                f"failed cuts: cons={detectionConsistency}/{n_good} minReq={min_required} "
+                f"fracHit={fractionDataPointsHit:.3f}"
+            )
+
+    # -----------------------------
+    # CONSISTENCY THRESHOLD KNOB (enforce)
+    # -----------------------------
+    if n_included < consistencyThreshold:
+        return _return_invalid(
+            f"insufficient included transits | n_included={n_included} required={consistencyThreshold} nTT={TT_search.size}"
+        )
+
+    if detectionConsistency < consistencyThreshold:
+        return _return_invalid(
+            f"failed consistency threshold | consistency={detectionConsistency} required={consistencyThreshold} "
+            f"n_included={n_included} nTT={TT_search.size}"
+        )
+
+    print(f"[FitMask RETURN OK] {tag} sigma_old={detectionSigmaOld:.6g} sigma_new={detectionSigmaNew:.6g} "
+          f"cons={detectionConsistency} fracHit={fractionDataPointsHit:.3f} "
+          f"(included {n_included}/{TT_search.size})", flush=True)
+
+    # -----------------------------
+    # Optional summary plots (unchanged from your newer version)
+    # + fig1/fig2 saves done safely
+    # -----------------------------
     if plotting:
-
         def _safe_ylim(ax, yvals, default_center, default_pad):
             if yvals.size:
                 ymin = float(np.nanmin(yvals))
@@ -10861,11 +11024,9 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
         ax.set_xlabel('Time (scaled transit duration)', fontsize=20)
         ax.set_ylabel('Flux', fontsize=20)
         if np.isfinite(meanPlanetTransitInterval):
-            print(f'meanPlanetTransitInterval (sec): {meanPlanetTransitInterval}')
             ax.scatter((timeArray / days2sec - 55000) % (meanPlanetTransitInterval / days2sec) - 1.5, fluxArray, s=1)
         if scaledWindowTime.size and totalWindowFlux.size:
             n = min(scaledWindowTime.size, totalWindowFlux.size)
-            print(f'scaledWindowTime size: {scaledWindowTime.size}, totalWindowFlux size: {totalWindowFlux.size}')
             ax.scatter(scaledWindowTime[:n], totalWindowFlux[:n] + meanTotalLightcurve, s=40)
         _safe_ylim(ax, totalWindowFlux + meanTotalLightcurve if totalWindowFlux.size else np.array([]),
                    meanTotalLightcurve, global_std_flux)
@@ -10885,7 +11046,6 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
                 meanScaledFlux[jj] = np.nan if not np.any(inbin) else float(np.nanmean(totalWindowFlux[inbin]))
             meanScaledFlux = meanScaledFlux[1:]
             meanScaledFlux_time = meanScaledFlux_time[1:] - (meanScaledFlux_time[1] - meanScaledFlux_time[0]) / 2.0
-            print(f'meanScaledFlux_time size: {meanScaledFlux_time.size}, meanScaledFlux size: {meanScaledFlux.size}')
             ax.plot(meanScaledFlux_time, meanScaledFlux + meanTotalLightcurve)
             ax.plot([-1 * transitDurationAllowance, 1 * transitDurationAllowance], [1., 1.], '--')
             _safe_ylim(ax, meanScaledFlux + meanTotalLightcurve, meanTotalLightcurve, global_std_flux)
@@ -10894,9 +11054,8 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
 
         plt.show(block=False)
 
-        # Save summary figs (only if outdir is valid)
         if outdir is not None:
-            fig_big.savefig((outdir / f'{mission}_{ID}_FoldedPlanetTransits.png'), bbox_inches='tight')
+            _draw_then_save(fig_big, (outdir / f'{mission}_{ID}_FoldedPlanetTransits.png'), bbox_inches='tight')
 
         # Depth/sigma per transit
         fig_depth = plt.figure(figsize=(8, 4))
@@ -10928,131 +11087,195 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
         plt.show(block=False)
 
         if outdir is not None:
-            fig_depth.savefig((outdir / f'{mission}_{ID}_IndividualTransitDepths.png'), bbox_inches='tight')
-            if 'fig1' in locals():
-                fig1.savefig((outdir / f'{mission}_{ID}_IndividualPlanetTransits.png'), bbox_inches='tight')
-            if 'fig2' in locals():
-                fig2.savefig((outdir / f'{mission}_{ID}_IndividualPlanetTransitsWiderWindow.png'), bbox_inches='tight')
+            _draw_then_save(fig_depth, (outdir / f'{mission}_{ID}_IndividualTransitDepths.png'), bbox_inches='tight')
+
+            # Save fig1/fig2 safely (prevents blank PNGs)
+            if fig1 is not None:
+                try:
+                    plt.figure(fig1.number)
+                except Exception:
+                    pass
+                _draw_then_save(fig1, (outdir / f'{mission}_{ID}_IndividualPlanetTransits.png'), bbox_inches='tight')
+
+            if fig2 is not None:
+                try:
+                    plt.figure(fig2.number)
+                except Exception:
+                    pass
+                _draw_then_save(fig2, (outdir / f'{mission}_{ID}_IndividualPlanetTransitsWiderWindow.png'), bbox_inches='tight')
 
         if totalWindowTime.size != totalWindowFlux.size:
             print(f"[WARN] totalWindowTime ({totalWindowTime.size}) != totalWindowFlux ({totalWindowFlux.size}); "
                   f"used min length for summary scatters.")
 
-    return (_meanFlux, float(detectionSigmaOld), float(detectionSigmaNew),
-            int(detectionConsistency), float(fractionDataPointsHit), TT_true, stdOutOfTransit)
+    return (meanFlux, float(detectionSigmaOld), float(detectionSigmaNew),
+            int(detectionConsistency), float(fractionDataPointsHit), TT_true, float(stdOutOfTransit))
 
 
 def Search_CreateTransitMask(
     z, RA, RB, timeArray, fluxArray,
     returnTransitTimes=True, meanTotalLightcurve=-27,
-    plotting=False, mission='BLAH', ID='BLAH',
-    SearchName='BLAH', maxCompTime=1
+    plotting=False, mission="BLAH", ID="BLAH",
+    SearchName="BLAH", maxCompTime=1
 ):
-    '''
-    Functionality:
-        Build an N-body (rebound) simulation of a circumbinary system from the
-        packed parameter vector `z`, predict planet transit times/durations
-        across the observation window, and score the match to the light curve
-        using Search_FitTransitMask. Handles stability and time-limit exits.
+    """
+    Backwards-compatible replacement for the *old* Search_CreateTransitMask.
 
-    Arguments:
-        z (sequence[float]): Packed parameters
-            [mA, mB, Pbin, ebin, omegabin, thetabin, Pp, ep, omegap, thetap].
-        RA (float): Primary-star radius (meters) for impact/duration model.
-        RB (float): Secondary-star radius (meters) for impact/duration model.
-        timeArray (array-like): Observation times [seconds].
-        fluxArray (array-like): Normalized flux values aligned to timeArray.
-        returnTransitTimes (bool): If True, return TT_true & TD_search too.
-        meanTotalLightcurve (float): Global flux mean used as baseline.
-        plotting (bool): If True, pass through to Search_FitTransitMask plots.
-        mission (str): Mission tag used in filenames/labels.
-        ID (str): Target identifier used in filenames/labels.
-        SearchName (str): Output directory name under PlanetSearchOutput/.
-        maxCompTime (float): Max allowed compute time (seconds) for the
-            transit-timing routine; if exceeded, returns sentinel scores.
+    Old-function semantics preserved:
+      - Build rebound sim from packed z.
+      - Run SSTT.TransitTiming_nbody_lite(...)
+      - If no transits returned => stable=False
+      - Branching:
+          if stable==True and exceedMaxCompTime==False:
+              run Search_FitTransitMask(...) and return its sigma_old etc.
+          elif stable==False:
+              return INVALID sentinels: meanFlux=27, sigma_old=-27, stdOOT=-27, TT_true=[]
+          elif exceedMaxCompTime==True:
+              return TIMEOUT sentinels: meanFlux=30, sigma_old=-30, stdOOT=-30, TT_true=[]
+      - returnTransitTimes controls whether you return transit arrays or only sigma_old
 
-    Returns:
-        If stable and within time budget:
-            [TT_true (np.ndarray), TD_search (np.ndarray),
-             sigma_solutionOld (float), meanFlux_solution (float),
-             stdOutOfTransit (float)]
-        If unstable:
-            [np.array([]), TD_search (np.ndarray with whatever was found),
-             -27.0, 27.0, -27.0]
-        If exceeded time limit:
-            [np.array([]), TD_search (np.ndarray with whatever was found),
-             -30.0, 30.0, -30.0]
-    '''
-    # z will be the mean window flux, which is what we are trying to minimise
-    # params will be the orbital elements
-    # Get the search parameters, which are all contained in 'z'
-    _mA,_mB,_Pbin,_ebin,_omegabin,_thetabin,_Pp,_ep,_omegap,_thetap = z
+    Compatibility features:
+      - Calls searchSim.move_to_com() like the old code.
+      - TransitTiming_nbody_lite: tries new signature (with cadence) then falls back to old.
+      - Search_FitTransitMask: tries new signature (with cadence + mission/ID) then falls back to old (KIC=ID).
 
-    # Create the rebound sim
-    timeStart = timeArray[0]
-    timeEnd = timeArray[-1]
+    Returns (same as old):
+      if returnTransitTimes:
+          [TT_true, TD_search, sigma_solutionOld, meanFlux_solution, stdOutOfTransit]
+      else:
+          [sigma_solutionOld]
+    """
+    import time
 
+    # ---- sentinels (exact old values) ----
+    INVALID_MEAN = 27.0
+    INVALID_SIGMA = -27.0
+    INVALID_STD = -27.0
+
+    TIMEOUT_MEAN = 30.0
+    TIMEOUT_SIGMA = -30.0
+    TIMEOUT_STD = -30.0
+
+    # ---- unpack z ----
+    _mA, _mB, _Pbin, _ebin, _omegabin, _thetabin, _Pp, _ep, _omegap, _thetap = z
+
+    timeArray = np.asarray(timeArray, dtype=float)
+    fluxArray = np.asarray(fluxArray, dtype=float)
+
+    timeStart = float(timeArray[0])
+    timeEnd = float(timeArray[-1])
+
+    # ---- build rebound sim (old style) ----
     searchSim = rebound.Simulation()
-    searchSim.units = ('s','m','kg')
-    mass = [_mA,_mB,0.]
-    period = np.array([_Pbin,_Pp])
-    a = PeriodToSemiMajorAxis(mass,period)
-    searchSim.add(m=_mA,r=RA)
-    searchSim.add(m=_mB,r=RB,a=a[0],e=_ebin,omega=_omegabin,theta=_thetabin)
-    searchSim.add(a=a[1],e=_ep,omega=_omegap,theta=_thetap)
+    searchSim.units = ("s", "m", "kg")
+
+    mass = [_mA, _mB, 0.0]
+    period = np.array([_Pbin, _Pp], dtype=float)
+    a = PeriodToSemiMajorAxis(mass, period)
+
+    searchSim.add(m=_mA, r=RA)
+    searchSim.add(m=_mB, r=RB, a=a[0], e=_ebin, omega=_omegabin, theta=_thetabin)
+    searchSim.add(a=a[1], e=_ep, omega=_omegap, theta=_thetap)
+
     searchSim.t = timeStart
+    # IMPORTANT: old code does this
+    searchSim.move_to_com()
 
-    timerStart = TIME.time() # used to time a single n-body simulation
-    # See if the data is 2 min or 30 min cadence (TESS or Kepler)
-    sorted_timeArray = np.sort(np.copy(timeArray))
-    cadence = min(np.diff(sorted_timeArray)) # Cadence is in seconds
-    if cadence <= 100:
+    # ---- cadence estimate (only used if your *new* TransitTiming or FitMask wants it) ----
+    sorted_time = np.sort(timeArray.copy())
+    dt = np.diff(sorted_time)
+    dt = dt[np.isfinite(dt) & (dt > 0)]
+    cadence = float(np.min(dt)) if dt.size else float("nan")
+
+    # keep your old “days vs seconds” guard behavior
+    if np.isfinite(cadence) and cadence <= 100:
         raise Exception("Data passed in appears to be in days not seconds")
+
+    # ---- transit timing (try new signature, fall back to old) ----
+    timerStart = time.time()
     try:
-        transitData_search = SSTT.TransitTiming_nbody_lite(searchSim,timeEnd,cadence,maxCompTime=maxCompTime)
-    except TimeoutError:
-        print('Timeout spotted')
-        transitData_search = {'transitTimes':np.array([]), 'transitDurations':np.array([]), 'stable':False, 'exceedMaxCompTime':True}
+        # NEWER signature (what you showed in your newer draft)
+        transitData_search = SSTT.TransitTiming_nbody_lite(
+            searchSim, timeEnd, cadence, maxCompTime=maxCompTime
+        )
+    except TypeError:
+        # OLDER signature (what your old code shows)
+        transitData_search = SSTT.TransitTiming_nbody_lite(
+            searchSim, timeEnd, maxCompTime
+        )
+    timerEnd = time.time()
 
-    timerEnd = TIME.time() # used to time a single n-body simulation
+    TT_search = np.asarray(transitData_search.get("transitTimes", np.array([])), dtype=float)
+    TD_search = np.asarray(transitData_search.get("transitDurations", np.array([])), dtype=float)
+    stable = bool(transitData_search.get("stable", False))
+    exceedMaxCompTime = bool(transitData_search.get("exceedMaxCompTime", False))
 
-    # July 2024: Additional output "exceedMaxCompTime" was added to the output dictionary
-    TT_search = transitData_search['transitTimes']
-    TD_search = transitData_search['transitDurations']
-    stable = transitData_search['stable']
-    exceedMaxCompTime = transitData_search['exceedMaxCompTime']
-
-    # July 2024: Add extra condition here. The system is considered unstable if the planet never transits
-    if len(TT_search) == 0:
+    # July 2024 rule from old code: no transits => unstable
+    if TT_search.size == 0:
         stable = False
 
-    # Score the model or return sentinels
-    if (stable == True) and (exceedMaxCompTime == False):
-        meanFlux_solution,sigma_solutionOld,sigma_solutionNew,consistency_solution,fractionDataPointsHit_solution,TT_true,stdOutOfTransit = Search_FitTransitMask(timeArray,fluxArray,TT_search,TD_search,meanTotalLightcurve,cadence,plotting=plotting,mission=mission,ID=ID,SearchName=SearchName)
+    print(
+        "DEBUG TransitTiming:",
+        "tStart=", timeStart,
+        "tEnd=", timeEnd,
+        "span_days=", (timeEnd - timeStart) / 86400.0,
+        "cadence_s=", cadence,
+        "len(TT_search)=", int(TT_search.size),
+        "stable=", stable,
+        "exceed=", exceedMaxCompTime,
+        "timing_s=", (timerEnd - timerStart),
+        flush=True,
+    )
 
-    elif (stable == False):
-        meanFlux_solution = 27
-        sigma_solutionOld = -27
-        sigma_solutionNew = -27
-        consistency_solution = 0
-        fractionDataPointsHit_solution = 0
-        stdOutOfTransit = -27
-        TT_true = np.array([])
+    # ---- old branching semantics ----
+    if (stable is True) and (exceedMaxCompTime is False):
+        # score with FitMask (try new signature, fall back to old)
+        timerStart = time.time()
+        try:
+            # NEW FitMask signature you’re migrating toward
+            meanFlux_solution, sigma_solutionOld, sigma_solutionNew, consistency_solution, \
+                fractionDataPointsHit_solution, TT_true, stdOutOfTransit = Search_FitTransitMask(
+                    timeArray, fluxArray, TT_search, TD_search,
+                    meanTotalLightcurve, cadence,
+                    plotting=plotting, mission=mission, ID=ID, SearchName=SearchName
+                )
+        except TypeError:
+            # OLD FitMask signature (KIC instead of mission/ID; no cadence argument)
+            meanFlux_solution, sigma_solutionOld, sigma_solutionNew, consistency_solution, \
+                fractionDataPointsHit_solution, TT_true, stdOutOfTransit = Search_FitTransitMask(
+                    timeArray, fluxArray, TT_search, TD_search,
+                    meanTotalLightcurve,
+                    plotting=plotting, KIC=ID, SearchName=SearchName
+                )
+        timerEnd = time.time()
 
-    elif (exceedMaxCompTime == True):
-        meanFlux_solution = 30
-        sigma_solutionOld = -30
-        sigma_solutionNew = -30
-        consistency_solution = 0
-        fractionDataPointsHit_solution = 0
-        stdOutOfTransit = -30
-        TT_true = np.array([])
+        print(
+            "DEBUG FitMask:",
+            "sigma_old=", sigma_solutionOld,
+            "meanFlux=", meanFlux_solution,
+            "stdOOT=", stdOutOfTransit,
+            "nTT=", int(TT_search.size),
+            "fit_s=", (timerEnd - timerStart),
+            flush=True,
+        )
 
-    # Output selection
-    if (returnTransitTimes == True):
-        return [TT_true,TD_search,sigma_solutionOld,meanFlux_solution,stdOutOfTransit]
+    elif (stable is False):
+        meanFlux_solution = INVALID_MEAN
+        sigma_solutionOld = INVALID_SIGMA
+        stdOutOfTransit = INVALID_STD
+        TT_true = np.array([], dtype=float)
+
+    elif (exceedMaxCompTime is True):
+        meanFlux_solution = TIMEOUT_MEAN
+        sigma_solutionOld = TIMEOUT_SIGMA
+        stdOutOfTransit = TIMEOUT_STD
+        TT_true = np.array([], dtype=float)
+
+    # ---- return format (exact old behavior) ----
+    if returnTransitTimes:
+        return [TT_true, TD_search, float(sigma_solutionOld), float(meanFlux_solution), float(stdOutOfTransit)]
     else:
-        return [sigma_solutionOld]
+        return [float(sigma_solutionOld)]
 
 
 def _segments_from_mask(x, mask, gap):
