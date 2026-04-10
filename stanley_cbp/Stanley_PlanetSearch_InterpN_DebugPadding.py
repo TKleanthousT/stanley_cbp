@@ -138,7 +138,7 @@ def Stanley_FindPlanets(
     pylab.ion
 
     # Threshold parameters (kept for parity)
-    consistencyThreshold = 3
+    consistencyThreshold = 1
     consistencySigmaFactor = 0.45
     fractionDataPointsHitThreshold = 0.45
     individualDataPointSigmaCutThreshold = 3

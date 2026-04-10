@@ -10603,7 +10603,7 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
     # knobs (KEEP SAME unless you choose to change)
     # -----------------------------
     transitDurationAllowance = 1.0
-    consistencyThreshold = 3
+    consistencyThreshold = 1
     consistencySigmaFactor = 0.45
     fractionDataPointsHitThreshold = 0.45
     fractionIndividualTransitsDataPointsHit = 0.75
