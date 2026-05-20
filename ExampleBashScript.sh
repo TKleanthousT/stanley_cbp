@@ -87,7 +87,12 @@ echo "[INFO $(date +'%F %T')] Running detrending..."
 python -m stanley_cbp.Stanley_Detrending \
     --systemName="${SYSTEM_ARG}" \
     --detrendingName="${DETREND_NAME}" \
-    --useSavedData=0
+    --useSavedData=0 \
+    --fluxType="pdcsap" \
+    --overrideBls=0 \
+    --overrideValidation=0 \
+    --injectTransits=0
+#    --injectionParamFile="Runs/UserGeneratedData/injections_capability_observability_aware.csv"
 
 echo "[INFO $(date +'%F %T')] Running planet search..."
 python -m stanley_cbp.Stanley_PlanetSearch_InterpN_DebugPadding \
@@ -98,9 +103,9 @@ python -m stanley_cbp.Stanley_PlanetSearch_InterpN_DebugPadding \
     --parallel=1 \
     --onCluster=1 \
     --interpolationValue=2 \
-    --boundsType="days to days" \
-    --minValue=90 \
-    --maxValue=98
+    --boundsType="stability limit ratio to stability limit ratio" \
+    --minValue=2.2 \
+    --maxValue=4.1
 
 echo "[INFO $(date +'%F %T')] Running analysis..."
 python -m stanley_cbp.Stanley_Analysis_InterpN \
