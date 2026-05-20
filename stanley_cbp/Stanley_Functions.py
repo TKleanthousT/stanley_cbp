@@ -10842,8 +10842,7 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
             individualTransitSigmaArray.append(0.0)
 
         # -----------------------------------------------------------------
-        # ✅ RESTORED OLDER PER-TRANSIT PLOTTING (fig1/fig2 panel grids)
-        #    (this is the bit you said you want EXACTLY)
+        # OLDER PER-TRANSIT PLOTTING (fig1/fig2 panel grids)
         # -----------------------------------------------------------------
         if plotting:
             # Ensure we attach to the right figure objects (prevents "blank fig2" surprises)
