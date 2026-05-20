@@ -12259,11 +12259,11 @@ def InjectTransits(
         _ap = PeriodToSemiMajorAxis(np.array([stellar_params['mA']+stellar_params['mB'], 0]), np.array([_Pp]))
 
     elif (injection_type == "manual_tess"):
-        _ep = inj_params[inj_params['TIC'] == int(TIC)]['ep'][0]
-        _omegap = inj_params[inj_params['TIC'] == int(TIC)]['omegap'][0]
-        _thetap = inj_params[inj_params['TIC'] == int(TIC)]['thetap'][0]
-        _Pp = inj_params[inj_params['TIC'] == int(TIC)]['Pp_days'][0] * days2sec
-        _Rp = inj_params[inj_params['TIC'] == int(TIC)]['Rp_rEarth'][0] * rEarth_m
+        _ep = inj_params[inj_params['TIC'] == int(KIC)]['ep'][0]
+        _omegap = inj_params[inj_params['TIC'] == int(KIC)]['omegap'][0]
+        _thetap = inj_params[inj_params['TIC'] == int(KIC)]['thetap'][0]
+        _Pp = inj_params[inj_params['TIC'] == int(KIC)]['Pp_days'][0] * days2sec
+        _Rp = inj_params[inj_params['TIC'] == int(KIC)]['Rp_rEarth'][0] * rEarth_m
         _ap = PeriodToSemiMajorAxis(np.array([stellar_params['mA']+stellar_params['mB'], 0]), np.array([_Pp]))
 
     elif (injection_type == "manual"):
