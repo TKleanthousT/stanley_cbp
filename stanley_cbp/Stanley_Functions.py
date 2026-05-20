@@ -10560,17 +10560,11 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
                           plotting=False, mission='BLAH', ID="BLAH", SearchName='BLAH', base_dir=None,
                           debug_include_failures=True):
     """
-    Your Feb-2026 patched Search_FitTransitMask logic, BUT with the per-transit plotting
-    restored to match your older version's fig1/fig2 panel plots *exactly*.
-
-    What changed vs your patched version:
-      - ONLY plotting:
-          * Reinsert older per-transit plotting block (ax1/ax2 scatter with same colors/sizes)
-          * Ensure fig1/fig2 saves are never blank: canvas draw + active figure selection
-          * Keep your new outdir resolution using base_dir (instead of hardcoded None)
+    Feb-2026 patched Search_FitTransitMask logic, BUT with the per-transit plotting
+    restored to match older version's fig1/fig2 panel plots *exactly*.
 
     Everything else (gates, stats, TT_search==0 handling, expected points fix, etc.) stays
-    as in your patched version.
+    as in patched version.
     """
     import os
     import numpy as np
@@ -10905,7 +10899,7 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
             # Match older intent: y-lims on ax2 too (wider window), using tracked min/max if valid
             if np.isfinite(plot_yMin2) and np.isfinite(plot_yMax2) and (plot_yMax2 > plot_yMin2):
                 ax2.set_ylim([plot_yMin2, plot_yMax2])
-            # else: leave as matplotlib default (your older code didn’t always force ax2)
+            # else: leave as matplotlib default (older code didn’t always force ax2)
 
     # -----------------------------
     # Aggregation
@@ -10991,7 +10985,7 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
           f"(included {n_included}/{TT_search.size})", flush=True)
 
     # -----------------------------
-    # Optional summary plots (unchanged from your newer version)
+    # Optional summary plots (unchanged from newer version)
     # + fig1/fig2 saves done safely
     # -----------------------------
     if plotting:
@@ -11180,25 +11174,25 @@ def Search_CreateTransitMask(
     # IMPORTANT: old code does this
     searchSim.move_to_com()
 
-    # ---- cadence estimate (only used if your *new* TransitTiming or FitMask wants it) ----
+    # ---- cadence estimate (only used if *new* TransitTiming or FitMask wants it) ----
     sorted_time = np.sort(timeArray.copy())
     dt = np.diff(sorted_time)
     dt = dt[np.isfinite(dt) & (dt > 0)]
     cadence = float(np.min(dt)) if dt.size else float("nan")
 
-    # keep your old “days vs seconds” guard behavior
+    # keep old “days vs seconds” guard behavior
     if np.isfinite(cadence) and cadence <= 100:
         raise Exception("Data passed in appears to be in days not seconds")
 
     # ---- transit timing (try new signature, fall back to old) ----
     timerStart = time.time()
     try:
-        # NEWER signature (what you showed in your newer draft)
+        # NEWER signature
         transitData_search = SSTT.TransitTiming_nbody_lite(
             searchSim, timeEnd, cadence, maxCompTime=maxCompTime
         )
     except TypeError:
-        # OLDER signature (what your old code shows)
+        # OLDER signature (what old code shows)
         transitData_search = SSTT.TransitTiming_nbody_lite(
             searchSim, timeEnd, maxCompTime
         )
@@ -11231,7 +11225,7 @@ def Search_CreateTransitMask(
         # score with FitMask (try new signature, fall back to old)
         timerStart = time.time()
         try:
-            # NEW FitMask signature you’re migrating toward
+            # NEW FitMask signature
             meanFlux_solution, sigma_solutionOld, sigma_solutionNew, consistency_solution, \
                 fractionDataPointsHit_solution, TT_true, stdOutOfTransit = Search_FitTransitMask(
                     timeArray, fluxArray, TT_search, TD_search,
@@ -11375,7 +11369,7 @@ def Search_Create1dSDE_wotanPoly(sigmaResults_1d, Pp_search, SearchName, ID, mis
         return -27, -27
 
     # If sigma is constant (especially all zeros), SDE is meaningless
-    # (this is exactly your current case)
+    # (this is exactly current case)
     sig_finite = sigma[np.isfinite(sigma)]
     if sig_finite.size > 0:
         smin = float(np.min(sig_finite))
