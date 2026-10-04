@@ -47,14 +47,14 @@ import time, pylab, argparse, warnings
 from pathlib import Path
 warnings.filterwarnings("ignore")  # Suppress expected numerical warnings
 
-# Package-relative import fallback
+# Package/local repository imports
 try:
-    # When installed as a package
-    from . import Stanley_Functions as AC 
+    # Installed package / editable install
+    from . import Stanley_Functions as AC
     from . import Stanley_TransitTiming as SSTT
     from .Stanley_Constants import *
-except Exception:
-    # Original local imports (cluster/local repo)
+except ImportError:
+    # Flat repository / cluster mode
     import Stanley_Functions as AC
     import Stanley_TransitTiming as SSTT
     from Stanley_Constants import *

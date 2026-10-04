@@ -27,7 +27,7 @@ try:
 except ImportError:
     # flat repo mode: direct imports
     import Stanley_TransitTiming as SSTT
-    from Stanley_Constants import *
+    from .Stanley_Constants import *
 
 import wotan
 import itertools
@@ -1537,7 +1537,7 @@ def _interp_nan(x, y, fill_value=None):
 	# Copy and pad ends with nearest finite neighbor
 	y_pad = y.copy()
 	first = np.argmax(good)  # first finite index
-	last  = len(y) - 1 - np.argmax(good[::-1])  # last finite index
+	last = len(y) - 1 - np.argmax(good[::-1])  # last finite index
 	y_pad[:first] = y[good][0]
 	y_pad[last+1:] = y[good][-1]
 	# Interpolate interior NaNs
@@ -1910,10 +1910,10 @@ def _bls_best_over_qgrid_chunk(args):
 	bls = BoxLeastSquares(t_days, f, fe)  # instantiate once per chunk
 	nP = len(P_days_chunk)
 	# initialize "best over q" accumulators
-	best_power    = np.full(nP, -np.inf, dtype=float)
-	best_depth    = np.full(nP, np.nan,  dtype=float)
+	best_power = np.full(nP, -np.inf, dtype=float)
+	best_depth = np.full(nP, np.nan,  dtype=float)
 	best_duration = np.full(nP, np.nan,  dtype=float)
-	best_t0       = np.full(nP, np.nan,  dtype=float)
+	best_t0 = np.full(nP, np.nan,  dtype=float)
 	for q in q_grid:
 		# duration grid for this q
 		D_days = q * P_days_chunk
@@ -1927,18 +1927,18 @@ def _bls_best_over_qgrid_chunk(args):
 		pow_full = np.full(nP, -np.inf, dtype=float)
 		dep_full = np.full(nP, np.nan,  dtype=float)
 		dur_full = np.full(nP, np.nan,  dtype=float)
-		t0_full  = np.full(nP, np.nan,  dtype=float)
+		t0_full = np.full(nP, np.nan,  dtype=float)
 		pow_full[mask] = res.power
 		dep_full[mask] = res.depth
 		dur_full[mask] = res.duration
-		t0_full[mask]  = res.transit_time
+		t0_full[mask] = res.transit_time
 		# take element-wise best over q
 		better = pow_full > best_power
 		if np.any(better):
-			best_power[better]    = pow_full[better]
-			best_depth[better]    = dep_full[better]
+			best_power[better] = pow_full[better]
+			best_depth[better] = dep_full[better]
 			best_duration[better] = dur_full[better]
-			best_t0[better]       = t0_full[better]
+			best_t0[better] = t0_full[better]
 	return {
 		"period": P_days_chunk,
 		"power": best_power,
@@ -1992,11 +1992,11 @@ def _bls_fixed_duration_chunk(args):
 	pow_full = np.full(nP, -np.inf, dtype=float)
 	dep_full = np.full(nP, np.nan,  dtype=float)
 	dur_full = np.full(nP, np.nan,  dtype=float)
-	t0_full  = np.full(nP, np.nan,  dtype=float)
+	t0_full = np.full(nP, np.nan,  dtype=float)
 	pow_full[mask] = res.power
 	dep_full[mask] = res.depth
 	dur_full[mask] = res.duration
-	t0_full[mask]  = res.transit_time
+	t0_full[mask] = res.transit_time
 	return {
 		"period": P_days_chunk,
 		"power": pow_full,
@@ -2060,8 +2060,8 @@ def _try_harmonics_fixed(bls, P_best_days, q_at_best):
 
 # Coarse-to-fine search presets for BLS; control decimation, phase tolerance, and evaluation caps
 COARSE = dict(decimate=12, phi_tol=0.35, max_evals=40_000, refine=False)
-MEDIUM  = dict(decimate=6,  phi_tol=0.25, max_evals=60_000, refine=False)
-SANE  = dict(decimate=1,  phi_tol=0.1, max_evals=160_000, refine=True)
+MEDIUM = dict(decimate=6,  phi_tol=0.25, max_evals=60_000, refine=False)
+SANE = dict(decimate=1,  phi_tol=0.1, max_evals=160_000, refine=True)
 FINE = dict(decimate=1,  phi_tol=0.01, max_evals=200_000, refine=True)
 FINER = dict(decimate=1,  phi_tol=0.001, max_evals=260_000, refine=True)
 FINEST = dict(decimate=1,  phi_tol=0.0001, max_evals=320_000, refine=True)
@@ -2496,11 +2496,11 @@ def _detect_single_dip_phase(
     '''
     # wrap phases to [0,1)
     phase = np.asarray(phase, float) % 1.0
-    flux  = np.asarray(flux,  float)
+    flux = np.asarray(flux,  float)
 
     # bin phases into n_bins using median in each bin
     edges = np.linspace(0.0, 1.0, n_bins + 1)
-    idx   = np.clip(np.digitize(phase, edges) - 1, 0, n_bins - 1)
+    idx = np.clip(np.digitize(phase, edges) - 1, 0, n_bins - 1)
     bflux = np.full(n_bins, np.nan)
     for k in range(n_bins):
         m = (idx == k)
@@ -2770,7 +2770,7 @@ def iterative_bls_single_dip_search(
             w = 1.0 / np.clip(dy, 1e-12, np.inf)**2
 
         X_flat = np.column_stack([np.ones(n)])
-        X_sin  = np.column_stack([np.ones(n),
+        X_sin = np.column_stack([np.ones(n),
                                   np.sin(2*np.pi*phase),
                                   np.cos(2*np.pi*phase)])
         W = np.diag(w)
@@ -2825,7 +2825,7 @@ def iterative_bls_single_dip_search(
         ax.grid(True, ls=':', alpha=0.4)
 
         if stats is not None:
-            f_bic, s_bic   = stats['flat']['bic'], stats['sine']['bic']
+            f_bic, s_bic = stats['flat']['bic'], stats['sine']['bic']
             f_chir, s_chir = stats['flat']['chi2_red'], stats['sine']['chi2_red']
             preferred = 'sine' if (annotate_metric or 'bic').lower() == 'bic' and s_bic < f_bic else \
                         ('sine' if s_chir < f_chir else 'flat')
@@ -3122,7 +3122,7 @@ def _fit_sine_on_phase(phase, flux, mask=None, sigma=3.0, max_iter=5, p0=None):
     '''
     # Ensure arrays
     phase = np.asarray(phase)
-    flux  = np.asarray(flux)
+    flux = np.asarray(flux)
 
     # Start from finite data only
     good = np.isfinite(phase) & np.isfinite(flux)
@@ -3415,7 +3415,7 @@ def _wrap_bands(mu, half_width, phase_min, phase_max):
     candidates = [mu - 1.0, mu, mu + 1.0]
     bands = []
     for m in candidates:
-        left  = m - half_width
+        left = m - half_width
         right = m + half_width
         # Intersect the band with the visible window
         L = max(left, phase_min)
@@ -3566,7 +3566,7 @@ def detrend_ellipsoidal(
     '''
     # Inputs to arrays
     time_s = np.asarray(time_s, float)
-    flux   = np.asarray(flux,   float)
+    flux = np.asarray(flux,   float)
 
     # Ellipsoidal modulation period is Pbin/2
     P_trend = float(Pbin_s) / 2.0
@@ -3630,7 +3630,7 @@ def detrend_ellipsoidal(
     y_used = y[sel]
     yhat_sine = trend[sel]
     const_level = float(np.nanmedian(y_used))
-    yhat_const  = np.full_like(y_used, const_level)
+    yhat_const = np.full_like(y_used, const_level)
 
     def _bic_local(ytrue, ypred, k):
         '''
@@ -3653,7 +3653,7 @@ def detrend_ellipsoidal(
         rss = max(rss, 1e-300)
         return n * np.log(rss / n) + k * np.log(n)
 
-    bic_sine  = _bic_local(y_used, yhat_sine, k=3)
+    bic_sine = _bic_local(y_used, yhat_sine, k=3)
     bic_const = _bic_local(y_used, yhat_const, k=1)
     delta = float(bic_const - bic_sine)  # positive favors sine
 
@@ -3804,7 +3804,7 @@ def detrend_reflection(
     '''
     # Inputs to arrays
     time_s = np.asarray(time_s, float)
-    flux   = np.asarray(flux,   float)
+    flux = np.asarray(flux,   float)
 
     # Reflection modulation at P_trend = Pbin
     P_trend = float(Pbin_s)
@@ -3866,7 +3866,7 @@ def detrend_reflection(
     y_used = y[sel]
     yhat_sine = trend[sel]
     const_level = float(np.nanmedian(y_used))
-    yhat_const  = np.full_like(y_used, const_level)
+    yhat_const = np.full_like(y_used, const_level)
 
     def _bic_local(ytrue, ypred, k):
         '''
@@ -3889,7 +3889,7 @@ def detrend_reflection(
         rss = max(rss, 1e-300)
         return n * np.log(rss / n) + k * np.log(n)
 
-    bic_sine  = _bic_local(y_used, yhat_sine, k=3)
+    bic_sine = _bic_local(y_used, yhat_sine, k=3)
     bic_const = _bic_local(y_used, yhat_const, k=1)
     delta = float(bic_const - bic_sine)  # positive → sine preferred
 
@@ -4705,14 +4705,14 @@ def modelEclipse3(
     '''
     # Local aliases (assumes these exist in module scope)
     classify_known_eclipse_local = classify_known_eclipse
-    initialGuess3_local          = initialGuess3
+    initialGuess3_local = initialGuess3
     _fit_with_optional_binning_l = _fit_with_optional_binning
-    gaussianModel_local          = gaussianModel
-    tanh_transit_flat_local      = tanh_transit_flat
-    RemoveEclipses_local         = RemoveEclipses
-    _secondary_sweep_optbin_l    = _secondary_sweep_with_optional_binning
-    vet_secondary_eclipse_local  = vet_secondary_eclipse
-    straightModel_local          = straightModel
+    gaussianModel_local = gaussianModel
+    tanh_transit_flat_local = tanh_transit_flat
+    RemoveEclipses_local = RemoveEclipses
+    _secondary_sweep_optbin_l = _secondary_sweep_with_optional_binning
+    vet_secondary_eclipse_local = vet_secondary_eclipse
+    straightModel_local = straightModel
 
     # Fallback for days2sec if not in scope
     try:
@@ -4725,8 +4725,8 @@ def modelEclipse3(
     retry_bin_width = 0.001 if (bw is None or (not np.isfinite(bw)) or (bw <= 0)) else float(bw)
 
     # Arrays
-    t  = np.asarray(timeArray, float)
-    y  = np.asarray(fluxArray, float)
+    t = np.asarray(timeArray, float)
+    y = np.asarray(fluxArray, float)
     ye = None if fluxArrayErr is None else np.asarray(fluxArrayErr, float)
 
     # Phase definition
@@ -4745,8 +4745,8 @@ def modelEclipse3(
             phaseTime = (phaseTime - phaseTime[idx_min] + 0.5) % 1.0
 
     # Bounds (depth, width, center)
-    lower  = np.array([1e-5, 1e-5, 0.25], float)
-    upper  = np.array([0.99, 0.3,  0.75], float)
+    lower = np.array([1e-5, 1e-5, 0.25], float)
+    upper = np.array([0.99, 0.3,  0.75], float)
     bounds = (lower, upper)
 
     # Primary initial guesses
@@ -4778,10 +4778,10 @@ def modelEclipse3(
 
     if np.isfinite(pwidthGuess) and (pwidthGuess > 0):
         w0_gauss = pwidthGuess / 5.0
-        w0_tanh  = pwidthGuess
+        w0_tanh = pwidthGuess
     else:
         w0_gauss = 0.01
-        w0_tanh  = 0.01
+        w0_tanh = 0.01
 
     try:
         print(f"[modelEclipse3] phaseTime range: {float(np.nanmin(phaseTime)):.4f}..{float(np.nanmax(phaseTime)):.4f}, "
@@ -4807,37 +4807,37 @@ def modelEclipse3(
         raise RuntimeError("Primary fit failed even after one binning retry.")
 
     _clip = np.clip
-    _sum  = np.sum
-    _log  = np.log
+    _sum = np.sum
+    _log = np.log
 
     if popt_g is not None:
         pdepth_gaus, sigma_g, prim_pos_gaus = popt_g
         pwidth_gaus = 5.0 * sigma_g
         yg_model = gaussianModel_local(xg, *popt_g)
-        resid_g  = yg - yg_model
+        resid_g = yg - yg_model
         k_g = 3
         n_g = yg.size
-        denom_g  = _clip((yeg if yeg is not None else 1.0), 1e-12, None)
-        chi2_g   = _sum((resid_g / denom_g)**2)
-        rchi2_g  = chi2_g / max(1, (n_g - k_g))
+        denom_g = _clip((yeg if yeg is not None else 1.0), 1e-12, None)
+        chi2_g = _sum((resid_g / denom_g)**2)
+        rchi2_g = chi2_g / max(1, (n_g - k_g))
         bic_gaussian = chi2_g + k_g * _log(max(1, n_g))
     else:
         bic_gaussian = np.inf
-        rchi2_g      = np.inf
+        rchi2_g = np.inf
 
     if popt_t is not None:
         pdepth_tanh, pwidth_tanh, prim_pos_tanh = popt_t
         yt_model = tanh_transit_flat_local(xt, *popt_t)
-        resid_t  = yt - yt_model
+        resid_t = yt - yt_model
         k_t = 3
         n_t = yt.size
-        denom_t  = _clip((yet if yet is not None else 1.0), 1e-12, None)
-        chi2_t   = _sum((resid_t / denom_t)**2)
-        rchi2_t  = chi2_t / max(1, (n_t - k_t))
+        denom_t = _clip((yet if yet is not None else 1.0), 1e-12, None)
+        chi2_t = _sum((resid_t / denom_t)**2)
+        rchi2_t = chi2_t / max(1, (n_t - k_t))
         bic_tanh = chi2_t + k_t * _log(max(1, n_t))
     else:
         bic_tanh = np.inf
-        rchi2_t  = np.inf
+        rchi2_t = np.inf
 
     if bic_gaussian < bic_tanh:
         print("Gaussian model is preferred for primary eclipse.")
@@ -5006,8 +5006,8 @@ def modelEclipse3(
         prim_pos = (prim_pos - 0.5) % 1.0
 
         sec_pos = float(result["phase_secondary"])
-        sdepth  = float(result["depth_fit"])
-        swidth  = float(result["width_fit"])
+        sdepth = float(result["depth_fit"])
+        swidth = float(result["width_fit"])
 
         phaseTime_full = ((t - bjd0) * invP) % 1.0
         timeCutBoth, fluxCutBoth, valid_mask_both = RemoveEclipses_local(
@@ -5065,18 +5065,18 @@ def modelEclipse3(
         if params is None:
             return np.inf
         yhat = model_func(x, *params)
-        r    = y - yhat
+        r = y - yhat
         if (yerr is None) or (yerr.size != y.size):
             denom = 1.0
         else:
             denom = np.clip(yerr, 1e-12, None)
         chi2 = np.sum((r / denom)**2)
-        k    = len(params); n = y.size
+        k = len(params); n = y.size
         return chi2 + k * np.log(max(1, n))
 
-    bic_gauss    = _compute_bic(gaussianModel_local,      p0_gauss_for_bic, x_used, y_used, ye_used)
+    bic_gauss = _compute_bic(gaussianModel_local,      p0_gauss_for_bic, x_used, y_used, ye_used)
     bic_straight = _compute_bic(straightModel_local,      popt_straight,    x_used, y_used, ye_used)
-    bic_tanh     = _compute_bic(tanh_transit_flat_local,  popt_tanh2,       x_used, y_used, ye_used)
+    bic_tanh = _compute_bic(tanh_transit_flat_local,  popt_tanh2,       x_used, y_used, ye_used)
 
     bics = {'gaussian': float(bic_gauss), 'straight': float(bic_straight), 'tanh': float(bic_tanh)}
     return timeCut, fluxCut, fluxErrCut, bics
@@ -6098,7 +6098,7 @@ def remove_spurious_deep_points(
                 robust_sigma = np.nanstd(residuals) if np.isfinite(np.nanstd(residuals)) else 1.0
             e = np.where(bad, robust_sigma, e)
         chi2 = np.nansum((residuals / e) ** 2)
-        dof  = max(1, len(residuals) - int(num_params))
+        dof = max(1, len(residuals) - int(num_params))
         return chi2 / dof
 
     try:
@@ -6108,11 +6108,11 @@ def remove_spurious_deep_points(
             return A * np.exp(-0.5 * ((phi - mu) / sigma) ** 2) + offset
 
     phi = (np.asarray(time) % Pbin) / Pbin
-    f   = np.asarray(flux, float)
-    fe  = np.asarray(flux_err if flux_err is not None else np.zeros_like(f), float)
+    f = np.asarray(flux, float)
+    fe = np.asarray(flux_err if flux_err is not None else np.zeros_like(f), float)
 
-    offsets     = float(np.nanmedian(f))
-    A_guess     = float(np.nanmin(f) - offsets)
+    offsets = float(np.nanmedian(f))
+    A_guess = float(np.nanmin(f) - offsets)
     sigma_guess = 0.02
     phase_guesses = np.arange(0.0, 1.0, float(max(phase_step, 1e-3)))
 
@@ -6131,11 +6131,11 @@ def remove_spurious_deep_points(
                 maxfev=20000
             )
             model_f = gaussianModel(phi, *popt)
-            chi2r   = calculate_reduced_chi_squared(f - model_f, fe, len(popt))
+            chi2r = calculate_reduced_chi_squared(f - model_f, fe, len(popt))
             if chi2r < best_chi2_red:
                 best_chi2_red = chi2r
-                best_params   = popt
-                best_fit      = model_f
+                best_params = popt
+                best_fit = model_f
         except:
             continue
 
@@ -6154,7 +6154,7 @@ def remove_spurious_deep_points(
     out_eclipse = ~in_eclipse
 
     eclipse_min = float(np.nanmin(f[in_eclipse]))
-    baseline    = float(np.nanmedian(f[out_eclipse])) if np.any(out_eclipse) else float(np.nanmedian(f))
+    baseline = float(np.nanmedian(f[out_eclipse])) if np.any(out_eclipse) else float(np.nanmedian(f))
     thr = eclipse_min + (1.0 - float(depth_threshold_fraction)) * (baseline - eclipse_min)
     thr = float(np.clip(thr, eclipse_min, baseline))
 
@@ -6968,8 +6968,8 @@ def findRb(Ra, phaseBinned, fluxBinned, fluxErrBinned):
     bestfit_flat_tanh, _ = so.curve_fit(tanh_transit_flat, phaseBinned, fluxBinned, p0=p0, method='trf', bounds=bounds, gtol=1e-8)
     pdepth_tanh, _, _ = bestfit_flat_tanh
 
-    resid_g  = fluxBinned - gaussianModel(phaseBinned, *bestfit_flat)
-    resid_t  = fluxBinned - tanh_transit_flat(phaseBinned, *bestfit_flat_tanh)
+    resid_g = fluxBinned - gaussianModel(phaseBinned, *bestfit_flat)
+    resid_t = fluxBinned - tanh_transit_flat(phaseBinned, *bestfit_flat_tanh)
     k_g, k_t = len(bestfit_flat), len(bestfit_flat_tanh)
     n = len(fluxBinned)
     chi2_g = np.sum((resid_g / fluxErrBinned) ** 2)
@@ -7008,7 +7008,7 @@ def findMb(Rb):
     xi_low_mass = 0.8
     xi_high_mass = 0.53
 
-    mass_guess_low  = Rb_solar ** (1 / xi_low_mass)
+    mass_guess_low = Rb_solar ** (1 / xi_low_mass)
     mass_guess_high = Rb_solar ** (1 / xi_high_mass)
 
     Mb_solar = mass_guess_high if mass_guess_high > 1 else mass_guess_low
@@ -7340,7 +7340,7 @@ def tanh_transit_flat(x, depth, width, location, sharpness=500.0):
     Returns:
         numpy.ndarray: Model flux values.
     '''
-    left  = np.tanh((x - (location - width/2.0)) * sharpness)
+    left = np.tanh((x - (location - width/2.0)) * sharpness)
     right = np.tanh((x - (location + width/2.0)) * sharpness)
     return 1.0 - depth * 0.5 * (left - right)  # peak drop ≈ depth
 
@@ -8044,8 +8044,8 @@ def binData(phaseTime, fluxArray, fluxArrayErr, bin_width=0.00001):
 
     # reduce
     valid = count > 0
-    phaseTimeBinned    = time_sum[valid] / count[valid]
-    fluxArrayBinned    = flux_sum[valid] / count[valid]
+    phaseTimeBinned = time_sum[valid] / count[valid]
+    fluxArrayBinned = flux_sum[valid] / count[valid]
     fluxArrayErrBinned = np.sqrt(flux_err_sq_sum[valid]) / count[valid]
 
     return phaseTimeBinned, fluxArrayBinned, fluxArrayErrBinned
@@ -9251,7 +9251,7 @@ def CalculatePeriodThetaSearchGrid(
         delta_thetap_orig = np.radians(360. * durationFactor_thetap * transit_duration_min / P_min)
         delta_thetap_new = np.radians(360. * durationFactor_thetap * transit_duration_min_new / P_max)
         print("delta_thetap_orig = %f deg" % (np.rad2deg(delta_thetap_orig)))
-        print("delta_thetap_new  = %f deg" % (np.rad2deg(delta_thetap_new)))
+        print("delta_thetap_new = %f deg" % (np.rad2deg(delta_thetap_new)))
         delta_thetap = max(delta_thetap_new, 1e-6)
         thetap_steps = int(2 * np.pi / delta_thetap + 1)
         base_thetap = np.linspace(0, 2 * np.pi, thetap_steps)
@@ -10558,7 +10558,7 @@ def DetrendLightCurve(timeOrig, fluxOrig, window_length=1, method='biweight', pl
 
 def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalLightcurve, cadence,
                           plotting=False, mission='BLAH', ID="BLAH", SearchName='BLAH', base_dir=None,
-                          debug_include_failures=True):
+                          debug_include_failures=False):
     """
     Feb-2026 patched Search_FitTransitMask logic, BUT with the per-transit plotting
     restored to match older version's fig1/fig2 panel plots *exactly*.
@@ -10591,7 +10591,17 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
         tag += f" TT0={TT_search[0]:.6g}"
     if TD_search.size:
         tag += f" TD0={TD_search[0]:.6g}"
-    print(f"[FitMask ENTER] {tag}", flush=True)
+        
+    # print(
+    # f"[FitMask ENTER] "
+    # f"pid={pid} "
+    # f"SearchName={SearchName} "
+    # f"ID={ID} "
+    # f"nTT={TT_search.size} "
+    # f"TT0={TT_search[0] if TT_search.size else np.nan:.6g} "
+    # f"TD0={TD_search[0] if TD_search.size else np.nan:.6g}",
+    # flush=True
+    # )
 
     # -----------------------------
     # knobs (KEEP SAME unless you choose to change)
@@ -10633,10 +10643,10 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
 
     # Helper: consistent with old function expectations
     def _return_invalid(reason=""):
-        if reason:
-            print(f"[FitMask RETURN INVALID] {tag} reason={reason}", flush=True)
-        else:
-            print(f"[FitMask RETURN INVALID] {tag}", flush=True)
+        # if reason:
+        #     print(f"[FitMask RETURN INVALID] {tag} reason={reason}", flush=True)
+        # else:
+        #     print(f"[FitMask RETURN INVALID] {tag}", flush=True)
         stdOOT = float(np.nanstd(allOutOfTransitFlux)) if allOutOfTransitFlux.size else 0.0
         return (float(meanTotalLightcurve), 0.0, 0.0, 0, 0.0, np.array([]), stdOOT)
 
@@ -10701,11 +10711,10 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
         if len(good) >= 5:
             break
 
-    print(f"[AXIS CHECK] found {len(good)} TT with data nearby")
     for k, (tt, td) in enumerate(good):
         j = np.argmin(np.abs(timeArray - tt))
         dt_sec = float(timeArray[j] - tt)  # assumes seconds
-        print(f"  k={k}  TT={tt:.6e}  nearest_time={timeArray[j]:.6e}  dt={dt_sec:.2f} s  cadence~{cadence:.2f} s")
+        # print(f"  k={k}  TT={tt:.6e}  nearest_time={timeArray[j]:.6e}  dt={dt_sec:.2f} s  cadence~{cadence:.2f} s")
 
     # -----------------------------
     # Per-transit loop
@@ -10945,8 +10954,8 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
     fractionDataPointsHit = (float(totalWindowFlux.size) / expectedMaxNumberDataPoints) if expectedMaxNumberDataPoints > 0 else 0.0
     fractionDataPointsHit = min(1.0, fractionDataPointsHit)
 
-    print(f"[FitMask fracHit] {tag} fracHit={fractionDataPointsHit} "
-          f"nWin={totalWindowFlux.size} expMax={expectedMaxNumberDataPoints} cadence={cadence}", flush=True)
+    # print(f"[FitMask fracHit] {tag} fracHit={fractionDataPointsHit} "
+    #       f"nWin={totalWindowFlux.size} expMax={expectedMaxNumberDataPoints} cadence={cadence}", flush=True)
 
     meanFlux = float(np.nanmean(totalWindowFlux)) if totalWindowFlux.size else meanTotalLightcurve
 
@@ -10980,9 +10989,9 @@ def Search_FitTransitMask(timeArray, fluxArray, TT_search, TD_search, meanTotalL
             f"n_included={n_included} nTT={TT_search.size}"
         )
 
-    print(f"[FitMask RETURN OK] {tag} sigma_old={detectionSigmaOld:.6g} sigma_new={detectionSigmaNew:.6g} "
-          f"cons={detectionConsistency} fracHit={fractionDataPointsHit:.3f} "
-          f"(included {n_included}/{TT_search.size})", flush=True)
+    # print(f"[FitMask RETURN OK] {tag} sigma_old={detectionSigmaOld:.6g} sigma_new={detectionSigmaNew:.6g} "
+    #       f"cons={detectionConsistency} fracHit={fractionDataPointsHit:.3f} "
+    #       f"(included {n_included}/{TT_search.size})", flush=True)
 
     # -----------------------------
     # Optional summary plots (unchanged from newer version)
@@ -11138,8 +11147,7 @@ def Search_CreateTransitMask(
       else:
           [sigma_solutionOld]
     """
-    import time
-
+    
     # ---- sentinels (exact old values) ----
     INVALID_MEAN = 27.0
     INVALID_SIGMA = -27.0
@@ -11185,7 +11193,7 @@ def Search_CreateTransitMask(
         raise Exception("Data passed in appears to be in days not seconds")
 
     # ---- transit timing (try new signature, fall back to old) ----
-    timerStart = time.time()
+    timerStart = TIME.time()
     try:
         # NEWER signature
         transitData_search = SSTT.TransitTiming_nbody_lite(
@@ -11196,7 +11204,7 @@ def Search_CreateTransitMask(
         transitData_search = SSTT.TransitTiming_nbody_lite(
             searchSim, timeEnd, maxCompTime
         )
-    timerEnd = time.time()
+    timerEnd = TIME.time()
 
     TT_search = np.asarray(transitData_search.get("transitTimes", np.array([])), dtype=float)
     TD_search = np.asarray(transitData_search.get("transitDurations", np.array([])), dtype=float)
@@ -11207,23 +11215,10 @@ def Search_CreateTransitMask(
     if TT_search.size == 0:
         stable = False
 
-    print(
-        "DEBUG TransitTiming:",
-        "tStart=", timeStart,
-        "tEnd=", timeEnd,
-        "span_days=", (timeEnd - timeStart) / 86400.0,
-        "cadence_s=", cadence,
-        "len(TT_search)=", int(TT_search.size),
-        "stable=", stable,
-        "exceed=", exceedMaxCompTime,
-        "timing_s=", (timerEnd - timerStart),
-        flush=True,
-    )
-
     # ---- old branching semantics ----
     if (stable is True) and (exceedMaxCompTime is False):
         # score with FitMask (try new signature, fall back to old)
-        timerStart = time.time()
+        timerStart = TIME.time()
         try:
             # NEW FitMask signature
             meanFlux_solution, sigma_solutionOld, sigma_solutionNew, consistency_solution, \
@@ -11240,17 +11235,7 @@ def Search_CreateTransitMask(
                     meanTotalLightcurve,
                     plotting=plotting, KIC=ID, SearchName=SearchName
                 )
-        timerEnd = time.time()
-
-        print(
-            "DEBUG FitMask:",
-            "sigma_old=", sigma_solutionOld,
-            "meanFlux=", meanFlux_solution,
-            "stdOOT=", stdOutOfTransit,
-            "nTT=", int(TT_search.size),
-            "fit_s=", (timerEnd - timerStart),
-            flush=True,
-        )
+        timerEnd = TIME.time()
 
     elif (stable is False):
         meanFlux_solution = INVALID_MEAN
@@ -11414,9 +11399,9 @@ def Search_Create1dSDE_wotanPoly(sigmaResults_1d, Pp_search, SearchName, ID, mis
         # knobs: when to use poly vs wotan
         # -----------------------------
         POLY_SPAN_DAYS = 10.0
-        POLY_MINPTS    = 80
-        CLIP_SIGMA     = 5.0
-        MIN_KEEP_FRAC  = 0.5
+        POLY_MINPTS = 80
+        CLIP_SIGMA = 5.0
+        MIN_KEEP_FRAC = 0.5
 
         window_pts = 201
         w_min_days = 2.0
@@ -12479,7 +12464,7 @@ def InjectTransits2(timeArray, fluxArray, ID, mission, DetrendingName, orbit_par
         params.w = 0.0
         params.u = [linParam, quadParam]
         params.rp = R_p/stellar_params['rA']
-        params.a  = abin/stellar_params['rA']
+        params.a = abin/stellar_params['rA']
 
         duration_rough = orbit_params['Pbin']*stellar_params['rA']/(np.pi*abin) * (1 + R_p/stellar_params['rA']) / years2sec
         timeTransit_rough = np.linspace(-0.6*duration_rough, 0.6*duration_rough, numDataPoints)
@@ -12615,7 +12600,7 @@ def InjectTransits_Batman(systemName, secondaryName, TT, TD, Tb, reboundSim, tim
         params.w = 0.0
         params.u = [linParam, quadParam]
         params.rp = p[2].r/p[0].r
-        params.a  = orbits[1].a/p[0].r
+        params.a = orbits[1].a/p[0].r
 
         duration_rough = orbits[1].P * p[0].r/(np.pi*orbits[1].a) * (1 + p[2].r/p[0].r) / years2sec
         timeTransit_rough = np.linspace(-0.6*duration_rough, 0.6*duration_rough, numDataPoints)

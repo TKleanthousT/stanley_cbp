@@ -56,14 +56,14 @@ import pylab, argparse, warnings
 import multiprocessing
 from functools import partial
 
-# Package-relative import fallback
+# Package/local repository imports
 try:
-    # package mode
+    # Installed package / editable install
     from . import Stanley_Functions as AC
     from . import Stanley_TransitTiming as SSTT
     from .Stanley_Constants import *
-except Exception:
-    # repo (flat) mode
+except ImportError:
+    # Flat repository / cluster mode
     import Stanley_Functions as AC
     import Stanley_TransitTiming as SSTT
     from Stanley_Constants import *
